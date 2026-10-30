@@ -1,0 +1,8 @@
+# Reglas de validación del contrato OpenAPI.
+extends:
+  - recommended
+rules:
+  # 401 (sin token) y 429 (límite de uso) aplican a toda la API y se documentan en la descripción general.
+  operation-4xx-response: off
+  # Licencia propietaria, sin URL pública.
+  info-license-strict: off

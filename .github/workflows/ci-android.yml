@@ -1,0 +1,38 @@
+name: Android
+
+on:
+  pull_request:
+    paths: ["app/**", "diseno/**"]
+  push:
+    branches: [main]
+    paths: ["app/**", "diseno/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  apk-pruebas:
+    # Se activa cuando la HU-0.4 cree el proyecto KMP.
+    if: ${{ hashFiles('app/gradlew') != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compilar APK de pruebas
+        run: ./gradlew :androidApp:assemblePruebasDebug
+        env:
+          URL_API_PRUEBAS: ${{ vars.URL_API_PRUEBAS }}
+          URL_AUTH_PRUEBAS: ${{ vars.URL_AUTH_PRUEBAS }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-pruebas
+          path: app/androidApp/build/outputs/apk/pruebas/debug/*.apk
+      # HU-1.5: publicar en Firebase App Distribution en cada merge a main
+      # usando el secreto FIREBASE_SERVICE_ACCOUNT y la variable FIREBASE_APP_ID.

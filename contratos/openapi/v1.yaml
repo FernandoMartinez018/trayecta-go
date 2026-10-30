@@ -1,0 +1,1155 @@
+openapi: 3.1.0
+info:
+  title: Trayecta Go API
+  version: 1.0.0
+  summary: API del backend de Trayecta Go.
+  description: |
+    API REST para la app móvil de Trayecta Go.
+
+    Convenciones:
+    - JSON en UTF-8; fechas y horas en ISO 8601 con zona horaria (`America/Bogota` para horarios del usuario).
+    - Coordenadas en grados decimales WGS84; geometrías de ruta en polyline6 (formato de Valhalla).
+    - Errores en formato Problem Details (RFC 9457), `application/problem+json`.
+    - Paginación por cursor (`cursor`, `limite`).
+    - Las operaciones que crean recursos desde el celular aceptan `Idempotency-Key` para evitar duplicados con mala señal.
+    - Toda operación autenticada puede responder 401 (token ausente o vencido) y 429 (límite de uso), con cuerpo Problem Details.
+  license:
+    name: Propietaria
+servers:
+  - url: https://api.pruebas.example
+    description: Pruebas (Oracle Cloud Always Free). La URL real se configura en el despliegue.
+  - url: https://api.produccion.example
+    description: Producción (GCP). La URL real se configura en el despliegue.
+security:
+  - oidc: []
+tags:
+  - name: sistema
+    description: Estado del servicio.
+  - name: usuario
+    description: Perfil, vehículo y dispositivos.
+  - name: lugares
+    description: Lugares guardados y búsqueda de direcciones.
+  - name: rutas
+    description: Rutas programadas, cálculo de rutas y paradas.
+  - name: viajes
+    description: Viajes y telemetría.
+  - name: alertas
+    description: Reportes y confirmaciones de alertas viales.
+  - name: reglas
+    description: Reglas locales (pico y placa, parrillero, vías prohibidas).
+  - name: privacidad
+    description: Consentimientos, exportación y borrado de datos.
+paths:
+  /v1/salud:
+    get:
+      tags: [sistema]
+      operationId: obtenerSalud
+      summary: Estado del servicio
+      security: []
+      responses:
+        '200':
+          description: El servicio responde.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [estado, version]
+                properties:
+                  estado:
+                    type: string
+                    enum: [ok, degradado]
+                  version:
+                    type: string
+
+  /v1/me:
+    get:
+      tags: [usuario]
+      operationId: obtenerUsuarioActual
+      summary: Perfil del usuario autenticado (lo crea en el primer acceso)
+      responses:
+        '200':
+          description: Perfil.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+    patch:
+      tags: [usuario]
+      operationId: actualizarUsuarioActual
+      summary: Actualiza alias y preferencias
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioActualizacion'
+      responses:
+        '200':
+          description: Perfil actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '400':
+          $ref: '#/components/responses/SolicitudInvalida'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+    delete:
+      tags: [privacidad]
+      operationId: eliminarCuenta
+      summary: Solicita la eliminación de la cuenta y sus datos (máximo 30 días)
+      responses:
+        '202':
+          description: Solicitud registrada.
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+
+  /v1/me/vehiculo:
+    get:
+      tags: [usuario]
+      operationId: obtenerVehiculo
+      summary: Vehículo activo del usuario
+      responses:
+        '200':
+          description: Vehículo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehiculo'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+    put:
+      tags: [usuario]
+      operationId: guardarVehiculo
+      summary: Crea o reemplaza el vehículo activo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Vehiculo'
+      responses:
+        '200':
+          description: Vehículo guardado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vehiculo'
+        '400':
+          $ref: '#/components/responses/SolicitudInvalida'
+
+  /v1/dispositivos:
+    post:
+      tags: [usuario]
+      operationId: registrarDispositivo
+      summary: Registra o actualiza el token de notificaciones push
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Dispositivo'
+      responses:
+        '204':
+          description: Registrado.
+
+  /v1/lugares:
+    get:
+      tags: [lugares]
+      operationId: listarLugares
+      summary: Lugares guardados (casa, oficina…)
+      responses:
+        '200':
+          description: Lugares.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Lugar'
+    post:
+      tags: [lugares]
+      operationId: crearLugar
+      summary: Guarda un lugar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Lugar'
+      responses:
+        '201':
+          description: Creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lugar'
+  /v1/lugares/{lugarId}:
+    parameters:
+      - $ref: '#/components/parameters/LugarId'
+    delete:
+      tags: [lugares]
+      operationId: eliminarLugar
+      summary: Elimina un lugar guardado
+      responses:
+        '204':
+          description: Eliminado.
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+
+  /v1/geocodificacion:
+    get:
+      tags: [lugares]
+      operationId: buscarDirecciones
+      summary: Busca direcciones y lugares (Photon, limitado a Colombia)
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 120
+        - name: cerca
+          in: query
+          description: Punto para priorizar resultados cercanos, "lat,lon".
+          schema:
+            type: string
+            pattern: '^-?\d+(\.\d+)?,-?\d+(\.\d+)?$'
+        - $ref: '#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Resultados.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResultadoBusqueda'
+
+  /v1/rutas:
+    get:
+      tags: [rutas]
+      operationId: listarRutas
+      summary: Rutas programadas y favoritas del usuario
+      responses:
+        '200':
+          description: Rutas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Ruta'
+    post:
+      tags: [rutas]
+      operationId: crearRuta
+      summary: Crea una ruta programada o favorita
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RutaCreacion'
+      responses:
+        '201':
+          description: Creada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruta'
+        '400':
+          $ref: '#/components/responses/SolicitudInvalida'
+  /v1/rutas/{rutaId}:
+    parameters:
+      - $ref: '#/components/parameters/RutaId'
+    get:
+      tags: [rutas]
+      operationId: obtenerRuta
+      summary: Detalle de una ruta
+      responses:
+        '200':
+          description: Ruta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruta'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+    patch:
+      tags: [rutas]
+      operationId: actualizarRuta
+      summary: Modifica una ruta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RutaCreacion'
+      responses:
+        '200':
+          description: Actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ruta'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+    delete:
+      tags: [rutas]
+      operationId: eliminarRuta
+      summary: Elimina una ruta
+      responses:
+        '204':
+          description: Eliminada.
+  /v1/rutas/{rutaId}/proxima-salida:
+    parameters:
+      - $ref: '#/components/parameters/RutaId'
+    get:
+      tags: [rutas]
+      operationId: obtenerProximaSalida
+      summary: Próxima hora de salida sugerida para una ruta programada
+      responses:
+        '200':
+          description: Próxima salida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProximaSalida'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+
+  /v1/calculos-ruta:
+    post:
+      tags: [rutas]
+      operationId: calcularRuta
+      summary: Calcula alternativas de ruta para el vehículo del usuario
+      description: |
+        Usa Valhalla con perfil de moto, excluye zonas de pico y placa activas para la placa del usuario
+        a la hora del viaje y alertas críticas confirmadas, y re-puntúa las alternativas.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudCalculoRuta'
+      responses:
+        '200':
+          description: Alternativas ordenadas, la primera es la recomendada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoCalculoRuta'
+        '400':
+          $ref: '#/components/responses/SolicitudInvalida'
+        '422':
+          description: No hay ruta posible con las restricciones vigentes.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problema'
+
+  /v1/paradas/optimizar:
+    post:
+      tags: [rutas]
+      operationId: optimizarParadas
+      summary: Ordena varias paradas para el modo domiciliario (VROOM)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [origen, paradas]
+              properties:
+                origen:
+                  $ref: '#/components/schemas/Punto'
+                paradas:
+                  type: array
+                  minItems: 2
+                  maxItems: 25
+                  items:
+                    $ref: '#/components/schemas/Punto'
+      responses:
+        '200':
+          description: Índices de `paradas` en el orden recomendado, con tiempos estimados.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [orden, duracionTotalSeg, distanciaTotalM]
+                properties:
+                  orden:
+                    type: array
+                    items:
+                      type: integer
+                      minimum: 0
+                  duracionTotalSeg:
+                    type: integer
+                  distanciaTotalM:
+                    type: integer
+
+  /v1/viajes:
+    post:
+      tags: [viajes]
+      operationId: iniciarViaje
+      summary: Registra el inicio de un viaje
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ViajeInicio'
+      responses:
+        '201':
+          description: Viaje iniciado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Viaje'
+    delete:
+      tags: [privacidad]
+      operationId: borrarHistorialViajes
+      summary: Borra todo el historial de viajes del usuario
+      responses:
+        '204':
+          description: Borrado.
+  /v1/viajes/{viajeId}:
+    parameters:
+      - name: viajeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      tags: [viajes]
+      operationId: finalizarViaje
+      summary: Registra la llegada y la valoración del viaje
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ViajeFin'
+      responses:
+        '200':
+          description: Viaje finalizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Viaje'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+
+  /v1/telemetria:
+    post:
+      tags: [viajes]
+      operationId: enviarTelemetria
+      summary: Lote de posiciones de un viaje (solo con consentimiento de aportar al tráfico)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoteTelemetria'
+      responses:
+        '202':
+          description: Recibido.
+        '403':
+          description: El usuario no ha dado el consentimiento de tráfico.
+
+  /v1/alertas:
+    get:
+      tags: [alertas]
+      operationId: listarAlertas
+      summary: Alertas activas en un área
+      parameters:
+        - name: bbox
+          in: query
+          required: true
+          description: '"lonMin,latMin,lonMax,latMax".'
+          schema:
+            type: string
+        - name: tipos
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/TipoAlerta'
+      responses:
+        '200':
+          description: Alertas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Alerta'
+    post:
+      tags: [alertas]
+      operationId: reportarAlerta
+      summary: Reporta una alerta (ubicación aproximada)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertaReporte'
+      responses:
+        '201':
+          description: Alerta creada o sumada a una existente cercana del mismo tipo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alerta'
+        '429':
+          description: Demasiados reportes en poco tiempo.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problema'
+  /v1/alertas/{alertaId}/confirmaciones:
+    parameters:
+      - name: alertaId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [alertas]
+      operationId: confirmarAlerta
+      summary: Responde "¿sigue ahí?"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sigueAhi]
+              properties:
+                sigueAhi:
+                  type: boolean
+      responses:
+        '204':
+          description: Registrada.
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+
+  /v1/reglas-locales:
+    get:
+      tags: [reglas]
+      operationId: obtenerReglasLocales
+      summary: Paquete versionado de reglas aprobadas (pico y placa, parrillero, vías prohibidas)
+      parameters:
+        - name: versionActual
+          in: query
+          description: Si coincide con la vigente, responde 304.
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paquete de reglas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaqueteReglas'
+        '304':
+          description: Sin cambios.
+
+  /v1/consentimientos:
+    get:
+      tags: [privacidad]
+      operationId: obtenerConsentimientos
+      summary: Consentimientos del usuario
+      responses:
+        '200':
+          description: Estado de cada consentimiento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Consentimientos'
+    put:
+      tags: [privacidad]
+      operationId: guardarConsentimientos
+      summary: Guarda los consentimientos del usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Consentimientos'
+      responses:
+        '200':
+          description: Guardados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Consentimientos'
+
+  /v1/privacidad/exportaciones:
+    post:
+      tags: [privacidad]
+      operationId: solicitarExportacion
+      summary: Solicita una copia de los datos del usuario; se avisa por notificación cuando esté lista
+      responses:
+        '202':
+          description: Solicitud registrada.
+
+components:
+  securitySchemes:
+    oidc:
+      type: openIdConnect
+      openIdConnectUrl: https://auth.example/realms/trayecta-go/.well-known/openid-configuration
+      description: Keycloak. La URL real depende del entorno.
+
+  parameters:
+    RutaId:
+      name: rutaId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    LugarId:
+      name: lugarId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limite:
+      name: limite
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 10
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID generado por la app para reintentos seguros.
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    SolicitudInvalida:
+      description: Datos inválidos.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    NoAutenticado:
+      description: Falta o venció el token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+    NoEncontrado:
+      description: No existe o no pertenece al usuario.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+
+  schemas:
+    Problema:
+      type: object
+      description: RFC 9457.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+
+    Punto:
+      type: object
+      required: [lat, lon]
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+
+    Usuario:
+      type: object
+      required: [id, alias, nivel, puntos, creadoEn]
+      properties:
+        id:
+          type: string
+          format: uuid
+        alias:
+          type: string
+          maxLength: 40
+        nivel:
+          type: string
+        puntos:
+          type: integer
+        reportesConfirmados:
+          type: integer
+        preferencias:
+          $ref: '#/components/schemas/Preferencias'
+        creadoEn:
+          type: string
+          format: date-time
+    UsuarioActualizacion:
+      type: object
+      properties:
+        alias:
+          type: string
+          maxLength: 40
+        preferencias:
+          $ref: '#/components/schemas/Preferencias'
+    Preferencias:
+      type: object
+      properties:
+        manosLibres:
+          type: boolean
+          default: true
+        modoSeguro:
+          type: boolean
+          default: false
+        avisosLluvia:
+          type: boolean
+          default: true
+        anticipacionAvisoMin:
+          type: integer
+          enum: [5, 10, 15]
+          default: 5
+        noMolestar:
+          type: object
+          properties:
+            activo:
+              type: boolean
+            desde:
+              type: string
+              pattern: '^\d{2}:\d{2}$'
+            hasta:
+              type: string
+              pattern: '^\d{2}:\d{2}$'
+
+    Vehiculo:
+      type: object
+      required: [tipo, ultimoDigitoPlaca]
+      properties:
+        tipo:
+          type: string
+          enum: [moto]
+          description: Solo moto en el MVP.
+        ultimoDigitoPlaca:
+          type: integer
+          minimum: 0
+          maximum: 9
+        llevaParrillero:
+          type: boolean
+          default: false
+
+    Dispositivo:
+      type: object
+      required: [plataforma, tokenPush]
+      properties:
+        plataforma:
+          type: string
+          enum: [android, ios]
+        tokenPush:
+          type: string
+
+    Lugar:
+      type: object
+      required: [nombre, ubicacion]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        nombre:
+          type: string
+          maxLength: 40
+        ubicacion:
+          $ref: '#/components/schemas/Punto'
+        zonaPrivada:
+          type: boolean
+          default: true
+          description: Oculta inicio y fin de viajes cerca de este lugar en la telemetría.
+
+    ResultadoBusqueda:
+      type: object
+      required: [nombre, ubicacion]
+      properties:
+        nombre:
+          type: string
+        direccion:
+          type: string
+        municipio:
+          type: string
+        ubicacion:
+          $ref: '#/components/schemas/Punto'
+        distanciaM:
+          type: integer
+
+    DiaSemana:
+      type: integer
+      minimum: 1
+      maximum: 7
+      description: ISO 8601, 1 = lunes.
+
+    RutaCreacion:
+      type: object
+      required: [origen, destino, tipo]
+      properties:
+        nombre:
+          type: string
+          maxLength: 60
+        origen:
+          $ref: '#/components/schemas/Punto'
+        destino:
+          $ref: '#/components/schemas/Punto'
+        tipo:
+          type: string
+          enum: [programada, libre]
+        diasSemana:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiaSemana'
+          description: Obligatorio si tipo = programada.
+        horaLlegada:
+          type: string
+          pattern: '^\d{2}:\d{2}$'
+          description: Hora local de Bogotá. Obligatoria si tipo = programada.
+        margenMin:
+          type: integer
+          minimum: 0
+          maximum: 30
+          default: 5
+        activa:
+          type: boolean
+          default: true
+    Ruta:
+      allOf:
+        - $ref: '#/components/schemas/RutaCreacion'
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              format: uuid
+            proximaSalida:
+              $ref: '#/components/schemas/ProximaSalida'
+    ProximaSalida:
+      type: object
+      required: [salidaSugerida, llegadaObjetivo, duracionSeg]
+      properties:
+        salidaSugerida:
+          type: string
+          format: date-time
+        llegadaObjetivo:
+          type: string
+          format: date-time
+        duracionSeg:
+          type: integer
+        cambioMin:
+          type: integer
+          description: Minutos de diferencia frente a lo habitual (negativo = salir antes).
+        motivo:
+          type: string
+          examples: ['Trancón en la ruta']
+        alertasEnRuta:
+          type: integer
+
+    SolicitudCalculoRuta:
+      type: object
+      required: [origen, destino]
+      properties:
+        origen:
+          $ref: '#/components/schemas/Punto'
+        destino:
+          $ref: '#/components/schemas/Punto'
+        salidaEn:
+          type: string
+          format: date-time
+          description: Hora de salida prevista; por defecto, ahora.
+        llegadaEn:
+          type: string
+          format: date-time
+          description: Alternativa a salidaEn para calcular por hora de llegada.
+        alternativas:
+          type: integer
+          minimum: 1
+          maximum: 3
+          default: 3
+    ResultadoCalculoRuta:
+      type: object
+      required: [alternativas, restriccionesAplicadas]
+      properties:
+        alternativas:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlternativaRuta'
+        restriccionesAplicadas:
+          type: array
+          items:
+            type: object
+            required: [reglaId, tipo, descripcion]
+            properties:
+              reglaId:
+                type: string
+                format: uuid
+              tipo:
+                $ref: '#/components/schemas/TipoRegla'
+              descripcion:
+                type: string
+    AlternativaRuta:
+      type: object
+      required: [criterio, geometria, duracionSeg, distanciaM, llegadaEstimada, segmentosTrafico]
+      properties:
+        criterio:
+          type: string
+          enum: [mas_rapida, mas_segura, menos_huecos]
+        geometria:
+          type: string
+          description: Polyline codificada con precisión 6.
+        duracionSeg:
+          type: integer
+        distanciaM:
+          type: integer
+        llegadaEstimada:
+          type: string
+          format: date-time
+        retrasoTraficoSeg:
+          type: integer
+        segmentosTrafico:
+          type: array
+          items:
+            type: object
+            required: [desdeIndice, hastaIndice, estado]
+            properties:
+              desdeIndice:
+                type: integer
+              hastaIndice:
+                type: integer
+              estado:
+                type: string
+                enum: [fluido, lento, trancon]
+              retrasoSeg:
+                type: integer
+        alertasEnRuta:
+          type: array
+          items:
+            $ref: '#/components/schemas/Alerta'
+        maniobras:
+          type: array
+          description: Instrucciones para Ferrostar.
+          items:
+            type: object
+            required: [instruccion, distanciaM, indiceGeometria]
+            properties:
+              instruccion:
+                type: string
+              tipo:
+                type: string
+              distanciaM:
+                type: integer
+              indiceGeometria:
+                type: integer
+
+    ViajeInicio:
+      type: object
+      required: [origen, destino, inicio]
+      properties:
+        rutaId:
+          type: string
+          format: uuid
+        origen:
+          $ref: '#/components/schemas/Punto'
+        destino:
+          $ref: '#/components/schemas/Punto'
+        inicio:
+          type: string
+          format: date-time
+        llegadaPredicha:
+          type: string
+          format: date-time
+    ViajeFin:
+      type: object
+      required: [llegadaReal]
+      properties:
+        llegadaReal:
+          type: string
+          format: date-time
+        valoracion:
+          type: string
+          enum: [buena, mejorable]
+    Viaje:
+      type: object
+      required: [id, inicio]
+      properties:
+        id:
+          type: string
+          format: uuid
+        rutaId:
+          type: string
+          format: uuid
+        inicio:
+          type: string
+          format: date-time
+        llegadaPredicha:
+          type: string
+          format: date-time
+        llegadaReal:
+          type: string
+          format: date-time
+        minutosDeAnticipacion:
+          type: integer
+          description: Positivo = llegó antes de la hora objetivo.
+        puntosGanados:
+          type: integer
+
+    LoteTelemetria:
+      type: object
+      required: [idSeudonimo, posiciones]
+      properties:
+        idSeudonimo:
+          type: string
+          description: Rota cada día; no se puede asociar al usuario.
+        posiciones:
+          type: array
+          maxItems: 120
+          items:
+            type: object
+            required: [t, lat, lon]
+            properties:
+              t:
+                type: string
+                format: date-time
+              lat:
+                type: number
+              lon:
+                type: number
+              velocidadKmh:
+                type: number
+              rumbo:
+                type: number
+
+    TipoAlerta:
+      type: string
+      enum: [control_vial, accidente, hueco, via_inundada, via_cerrada, zona_riesgo]
+    AlertaReporte:
+      type: object
+      required: [tipo, ubicacion]
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoAlerta'
+        ubicacion:
+          $ref: '#/components/schemas/Punto'
+        porVoz:
+          type: boolean
+          default: false
+    Alerta:
+      type: object
+      required: [id, tipo, ubicacionAproximada, fuente, confianza, estado, creadaEn, venceEn]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tipo:
+          $ref: '#/components/schemas/TipoAlerta'
+        ubicacionAproximada:
+          $ref: '#/components/schemas/Punto'
+        celdaH3:
+          type: string
+        fuente:
+          type: string
+          enum: [comunidad, datos_abiertos, noticia, bot]
+        confianza:
+          type: string
+          enum: [baja, media, alta]
+        confirmaciones:
+          type: integer
+        estado:
+          type: string
+          enum: [activa, vencida, descartada]
+        creadaEn:
+          type: string
+          format: date-time
+        venceEn:
+          type: string
+          format: date-time
+
+    TipoRegla:
+      type: string
+      enum: [pico_placa, parrillero, via_prohibida]
+    PaqueteReglas:
+      type: object
+      required: [version, generadoEn, reglas]
+      properties:
+        version:
+          type: integer
+        generadoEn:
+          type: string
+          format: date-time
+        reglas:
+          type: array
+          items:
+            type: object
+            required: [id, tipo, municipio, zona, calendario, vigenteDesde]
+            properties:
+              id:
+                type: string
+                format: uuid
+              tipo:
+                $ref: '#/components/schemas/TipoRegla'
+              municipio:
+                type: string
+              zona:
+                type: object
+                description: GeoJSON MultiPolygon o LineString.
+              calendario:
+                type: object
+                description: Días, franjas horarias y dígitos restringidos; excepciones por festivos.
+              vigenteDesde:
+                type: string
+                format: date
+              vigenteHasta:
+                type: string
+                format: date
+              fuenteUrl:
+                type: string
+                format: uri
+
+    Consentimientos:
+      type: object
+      required: [aprenderRutas, aportarTrafico, comunicacionesComerciales]
+      properties:
+        aprenderRutas:
+          type: boolean
+        aportarTrafico:
+          type: boolean
+        comunicacionesComerciales:
+          type: boolean
+        versionPolitica:
+          type: string
+          readOnly: true

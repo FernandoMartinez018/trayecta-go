@@ -1,0 +1,276 @@
+asyncapi: 3.0.0
+info:
+  title: Trayecta Go · eventos
+  version: 1.0.0
+  description: |
+    Eventos internos del backend sobre RabbitMQ. Todos usan el sobre CloudEvents 1.0 en modo estructurado
+    (`application/cloudevents+json`). El `type` sigue el patrón `co.trayectago.<dominio>.<evento>.v<versión>`.
+    Los eventos nunca llevan datos personales directos: solo identificadores internos.
+defaultContentType: application/cloudevents+json
+
+servers:
+  local:
+    host: localhost:5672
+    protocol: amqp
+    description: RabbitMQ del entorno local (Docker Compose).
+
+channels:
+  alertaCreada:
+    address: alertas.creada
+    messages:
+      alertaCreada:
+        $ref: '#/components/messages/AlertaCreada'
+  alertaConfirmada:
+    address: alertas.confirmada
+    messages:
+      alertaConfirmada:
+        $ref: '#/components/messages/AlertaConfirmada'
+  alertaVencida:
+    address: alertas.vencida
+    messages:
+      alertaVencida:
+        $ref: '#/components/messages/AlertaVencida'
+  salidaActualizada:
+    address: rutas.salida-actualizada
+    messages:
+      salidaActualizada:
+        $ref: '#/components/messages/SalidaActualizada'
+  rutaLista:
+    address: rutas.lista-para-salir
+    messages:
+      rutaLista:
+        $ref: '#/components/messages/RutaLista'
+  viajeFinalizado:
+    address: viajes.finalizado
+    messages:
+      viajeFinalizado:
+        $ref: '#/components/messages/ViajeFinalizado'
+  posiciones:
+    address: telemetria.posiciones
+    description: RabbitMQ Stream con retención de 7 días.
+    messages:
+      posiciones:
+        $ref: '#/components/messages/Posiciones'
+  reglasPublicadas:
+    address: reglas.publicadas
+    messages:
+      reglasPublicadas:
+        $ref: '#/components/messages/ReglasPublicadas'
+  notificacionSolicitada:
+    address: notificaciones.solicitada
+    messages:
+      notificacionSolicitada:
+        $ref: '#/components/messages/NotificacionSolicitada'
+
+operations:
+  publicarAlertaCreada:
+    action: send
+    channel:
+      $ref: '#/channels/alertaCreada'
+  publicarAlertaConfirmada:
+    action: send
+    channel:
+      $ref: '#/channels/alertaConfirmada'
+  publicarAlertaVencida:
+    action: send
+    channel:
+      $ref: '#/channels/alertaVencida'
+  publicarSalidaActualizada:
+    action: send
+    channel:
+      $ref: '#/channels/salidaActualizada'
+  publicarRutaLista:
+    action: send
+    channel:
+      $ref: '#/channels/rutaLista'
+  publicarViajeFinalizado:
+    action: send
+    channel:
+      $ref: '#/channels/viajeFinalizado'
+  publicarPosiciones:
+    action: send
+    channel:
+      $ref: '#/channels/posiciones'
+  publicarReglas:
+    action: send
+    channel:
+      $ref: '#/channels/reglasPublicadas'
+  recibirNotificacion:
+    action: receive
+    channel:
+      $ref: '#/channels/notificacionSolicitada'
+
+components:
+  schemas:
+    Sobre:
+      type: object
+      description: Campos CloudEvents comunes.
+      required: [specversion, id, source, type, time, data]
+      properties:
+        specversion:
+          type: string
+          const: '1.0'
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          examples: ['/backend/alertas']
+        type:
+          type: string
+        time:
+          type: string
+          format: date-time
+        datacontenttype:
+          type: string
+          const: application/json
+  messages:
+    AlertaCreada:
+      name: co.trayectago.alertas.creada.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [alertaId, tipo, celdaH3, fuente, confianza]
+                properties:
+                  alertaId: { type: string, format: uuid }
+                  tipo: { type: string }
+                  celdaH3: { type: string }
+                  fuente: { type: string }
+                  confianza: { type: number, minimum: 0, maximum: 1 }
+    AlertaConfirmada:
+      name: co.trayectago.alertas.confirmada.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [alertaId, sigueAhi, tipoConfirmacion, confianzaNueva]
+                properties:
+                  alertaId: { type: string, format: uuid }
+                  sigueAhi: { type: boolean }
+                  tipoConfirmacion: { type: string, enum: [activa, pasiva] }
+                  confianzaNueva: { type: number, minimum: 0, maximum: 1 }
+    AlertaVencida:
+      name: co.trayectago.alertas.vencida.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [alertaId, motivo]
+                properties:
+                  alertaId: { type: string, format: uuid }
+                  motivo: { type: string, enum: [tiempo, descartada, moderacion] }
+    SalidaActualizada:
+      name: co.trayectago.rutas.salida-actualizada.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [rutaId, usuarioId, salidaSugerida, cambioMin]
+                properties:
+                  rutaId: { type: string, format: uuid }
+                  usuarioId: { type: string, format: uuid }
+                  salidaSugerida: { type: string, format: date-time }
+                  cambioMin: { type: integer }
+                  motivo: { type: string }
+    RutaLista:
+      name: co.trayectago.rutas.lista-para-salir.v1
+      summary: Faltan 5 minutos para la salida; activa el botón Iniciar del widget.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [rutaId, usuarioId, salidaSugerida]
+                properties:
+                  rutaId: { type: string, format: uuid }
+                  usuarioId: { type: string, format: uuid }
+                  salidaSugerida: { type: string, format: date-time }
+    ViajeFinalizado:
+      name: co.trayectago.viajes.finalizado.v1
+      summary: Alimenta la corrección de ETA y de la hora de salida.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [viajeId, llegadaPredicha, llegadaReal]
+                properties:
+                  viajeId: { type: string, format: uuid }
+                  rutaId: { type: string, format: uuid }
+                  llegadaPredicha: { type: string, format: date-time }
+                  llegadaReal: { type: string, format: date-time }
+                  valoracion: { type: string, enum: [buena, mejorable] }
+    Posiciones:
+      name: co.trayectago.telemetria.posiciones.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [idSeudonimo, posiciones]
+                properties:
+                  idSeudonimo: { type: string }
+                  posiciones:
+                    type: array
+                    items:
+                      type: object
+                      required: [t, lat, lon]
+                      properties:
+                        t: { type: string, format: date-time }
+                        lat: { type: number }
+                        lon: { type: number }
+                        velocidadKmh: { type: number }
+    ReglasPublicadas:
+      name: co.trayectago.reglas.publicadas.v1
+      summary: Nueva versión aprobada; regenera exclusiones de Valhalla y avisa a la app.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [version, reglasCambiadas]
+                properties:
+                  version: { type: integer }
+                  reglasCambiadas:
+                    type: array
+                    items: { type: string, format: uuid }
+    NotificacionSolicitada:
+      name: co.trayectago.notificaciones.solicitada.v1
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [usuarioId, tipo]
+                properties:
+                  usuarioId: { type: string, format: uuid }
+                  tipo:
+                    type: string
+                    enum: [salida_actualizada, ruta_lista, alerta_en_ruta, lluvia, exportacion_lista]
+                  recargarWidget: { type: boolean }
+                  parametros:
+                    type: object
+                    additionalProperties: { type: string }

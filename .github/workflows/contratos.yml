@@ -1,0 +1,24 @@
+name: Contratos
+
+on:
+  pull_request:
+    paths: ["contratos/**"]
+  push:
+    branches: [main]
+    paths: ["contratos/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Validar OpenAPI
+        run: npx --yes @redocly/cli@1.25.11 lint contratos/openapi/v1.yaml
+      - name: Validar AsyncAPI
+        run: npx --yes @asyncapi/cli@2.3.0 validate contratos/asyncapi/v1.yaml

@@ -1,0 +1,66 @@
+# Servicios para desarrollo local de Trayecta Go.
+# Uso: docker compose -f entorno-local/compose.yaml up -d
+# Antes del primer arranque lee entorno-local/README.md (extracto OSM y tiles de Valhalla).
+# HU-0.1: Claude Code debe fijar versiones exactas de cada imagen y comprobar que levantan.
+
+name: trayecta-go-local
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: trayecta
+      POSTGRES_USER: trayecta
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-solo-local}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./datos/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trayecta"]
+      interval: 10s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: trayecta
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-solo-local}
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-solo-local}
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+
+  valhalla:
+    # Imagen con scripts que generan los tiles desde el .pbf de ./datos/osm. Verificar nombre y versión vigentes (HU-0.1).
+    image: ghcr.io/valhalla/valhalla-scripted:latest
+    ports:
+      - "8002:8002"
+    environment:
+      tile_urls: ""
+      use_tiles_ignore_pbf: "False"
+      build_elevation: "False"
+      build_admins: "True"
+      build_time_zones: "True"
+    volumes:
+      - ./datos/osm:/custom_files
+
+  photon:
+    # Geocodificador con datos de Colombia. Verificar imagen mantenida y su forma de importar datos (HU-0.1).
+    image: rtuszik/photon-docker:latest
+    ports:
+      - "2322:2322"
+    environment:
+      COUNTRY_CODE: co
+    volumes:
+      - ./datos/photon:/photon/photon_data

@@ -1,7 +1,8 @@
 # Backend
 
-Kotlin + Ktor (JVM 21), monolito modular. Lo inicializa la historia **HU-0.2** del backlog.
+Kotlin + Ktor (JVM 21), monolito modular por paquetes (`comun`, `usuarios`, …).
 
-- Migraciones: `src/main/resources/db/migration` (Flyway). `V1__esquema_inicial.sql` ya está escrita a partir del modelo de datos.
+- Migraciones: `src/main/resources/db/migration` (Flyway). Una migración aplicada no se edita: se crea otra.
 - Contrato: `../contratos/openapi/v1.yaml`.
-- Configuración solo por variables de entorno; ver `.env.ejemplo` (lo crea la HU-0.2).
+- Configuración solo por variables de entorno; las de ejemplo están en `.env.ejemplo`.
+- Pruebas, imagen local y arranque, siempre en Docker: ver `../entorno-local/README.md`.

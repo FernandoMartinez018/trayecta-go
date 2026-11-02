@@ -1,0 +1,15 @@
+<configuration>
+  <!-- Logs JSON en una línea; el MDC idPeticion viaja en cada evento. Nunca datos personales. -->
+  <appender name="CONSOLA" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+  </appender>
+
+  <logger name="io.ktor" level="INFO"/>
+  <logger name="io.netty" level="WARN"/>
+  <logger name="com.zaxxer.hikari" level="INFO"/>
+  <logger name="org.flywaydb" level="INFO"/>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLA"/>
+  </root>
+</configuration>

@@ -11,6 +11,9 @@ export const ESQUEMA_APP = 'co.trayectago.app:';
 const REDIRECT = 'co.trayectago.app:/oauth2redirect';
 const CLIENTE = 'app-movil';
 
+/** Correo único por prueba: el enlace mágico crea la cuenta en el primer ingreso. */
+export const correoNuevo = () => `prueba-${randomUUID()}@trayecta.test`;
+
 export function decodificarJwt(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
 }

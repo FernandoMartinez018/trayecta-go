@@ -5,14 +5,13 @@ import { esperarMensaje } from '../utilidades/mailpit';
 import { crearPkce } from '../utilidades/pkce';
 import {
   abrirEnlaceEnOtroNavegador,
+  correoNuevo,
   decodificarJwt,
   ESQUEMA_APP,
   iniciarSesionConEnlace,
   pedirEnlace,
   urlDeAutorizacion,
 } from '../utilidades/sesion';
-
-const correoNuevo = () => `prueba-${randomUUID()}@trayecta.test`;
 
 test('el enlace mágico entrega tokens para la app', async ({ browser }) => {
   const t = await iniciarSesionConEnlace(browser, correoNuevo());

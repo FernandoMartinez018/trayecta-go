@@ -49,6 +49,9 @@ docker compose -f entorno-local/compose.yaml --profile herramientas run --rm her
 docker load -i backend/build/jib-image.tar
 docker compose -f entorno-local/compose.yaml --profile app up -d backend
 
+# App Android: pruebas, lint y APK de pruebas (la primera vez construye la imagen con el Android SDK, ~1,5 GB)
+docker compose -f entorno-local/compose.yaml --profile herramientas run --rm android ./gradlew :shared:testAndroidHostTest :androidApp:lintPruebasDebug :androidApp:assemblePruebasDebug -PurlApi=https://api.ejemplo.invalid -PurlAuth=https://auth.ejemplo.invalid
+
 # E2E de identidad y API (Keycloak, Mailpit y, para la API, el backend levantados)
 docker compose -f entorno-local/compose.yaml --profile e2e run --rm e2e
 ```

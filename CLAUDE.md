@@ -134,6 +134,9 @@ docker compose -f entorno-local/compose.yaml up -d --build
 docker compose -f entorno-local/compose.yaml --profile herramientas run --rm herramientas ./gradlew test
 docker compose -f entorno-local/compose.yaml --profile herramientas run --rm herramientas ./gradlew jibBuildTar -Djib.from.platforms=linux/amd64 -Djib.to.image=trayecta-go-backend:local -PversionApp=local
 
+# App Android: pruebas, lint y APK de pruebas (las URL entran por -PurlApi/-PurlAuth o URL_API_PRUEBAS/URL_AUTH_PRUEBAS)
+docker compose -f entorno-local/compose.yaml --profile herramientas run --rm android ./gradlew :shared:testAndroidHostTest :androidApp:lintPruebasDebug :androidApp:assemblePruebasDebug -PurlApi=https://api.ejemplo.invalid -PurlAuth=https://auth.ejemplo.invalid
+
 # Pruebas E2E (identidad y API)
 docker compose -f entorno-local/compose.yaml --profile e2e run --rm e2e
 
@@ -144,4 +147,4 @@ docker compose -f entorno-local/compose.yaml --profile herramientas run --rm nod
 docker compose -f entorno-local/compose.yaml down
 ```
 
-Los comandos de la app y del tema se agregan con sus historias (HU-0.4 y HU-0.5).
+El comando del tema se agrega con la HU-0.5. Las dependencias de Gradle están bloqueadas (`gradle.lockfile`); al cambiar una versión, regenera con `./gradlew dependencies --write-locks` (backend) o `./gradlew :shared:dependencies :androidApp:dependencies --write-locks` (app).

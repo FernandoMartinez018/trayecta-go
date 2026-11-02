@@ -21,11 +21,12 @@ jobs:
         working-directory: backend
     services:
       # La imagen oficial solo existe para amd64, que es lo que usan los runners.
+      # Base efímera que solo escucha en el runner: autenticación trust, sin clave escrita en el repo.
       db:
         image: postgis/postgis:16-3.6
         env:
           POSTGRES_USER: trayecta
-          POSTGRES_PASSWORD: solo-local
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: trayecta_pruebas
         ports:
           - "5432:5432"

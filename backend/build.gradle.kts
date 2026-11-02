@@ -15,6 +15,11 @@ kotlin {
     jvmToolchain(21)
 }
 
+// Versiones transitivas fijas en gradle.lockfile; para actualizarlas: ./gradlew dependencies --write-locks
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 application {
     mainClass = "co.trayectago.backend.AplicacionKt"
 }

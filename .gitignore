@@ -29,6 +29,10 @@ node_modules/
 .vercel/
 dist/
 
+# Pruebas E2E (Playwright)
+pruebas-e2e/test-results/
+pruebas-e2e/playwright-report/
+
 # Entorno local
 entorno-local/datos/
 *.osm.pbf

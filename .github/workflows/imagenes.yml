@@ -1,0 +1,60 @@
+name: Imágenes
+
+on:
+  pull_request:
+    paths: ["imagenes/**", "identidad/**", ".github/workflows/imagenes.yml"]
+  push:
+    branches: [main]
+    paths: ["imagenes/**", "identidad/**", ".github/workflows/imagenes.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  construir:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        imagen:
+          - { nombre: postgis, contexto: imagenes/postgis, version: "16.15-3.6.4" }
+          - { nombre: photon, contexto: imagenes/photon, version: "1.3.0" }
+          - { nombre: keycloak, contexto: identidad, version: "26.8.1-0.94" }
+    steps:
+      - uses: actions/checkout@v7
+
+      # En main se publica para amd64 y arm64 (la VM de Oracle es ARM); en PR solo se construye amd64.
+      - uses: docker/setup-qemu-action@v4
+        if: github.event_name == 'push'
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        if: github.event_name == 'push'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/fernandomartinez018/trayecta-go-${{ matrix.imagen.nombre }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=main
+            type=raw,value=${{ matrix.imagen.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/FernandoMartinez018/trayecta-go
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.imagen.contexto }}
+          platforms: ${{ github.event_name == 'push' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.imagen.nombre }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.imagen.nombre }}

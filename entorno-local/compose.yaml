@@ -1,13 +1,14 @@
 # Servicios para desarrollo local de Trayecta Go.
 # Uso: docker compose -f entorno-local/compose.yaml up -d
-# Antes del primer arranque lee entorno-local/README.md (extracto OSM y tiles de Valhalla).
-# HU-0.1: Claude Code debe fijar versiones exactas de cada imagen y comprobar que levantan.
+# Primer arranque, puertos y pruebas: entorno-local/README.md.
+# Los datos van en volúmenes con nombre: los bind mounts de Windows rompen los permisos de PostgreSQL.
 
 name: trayecta-go-local
 
 services:
   postgres:
-    image: postgis/postgis:16-3.4
+    build: ../imagenes/postgis
+    image: trayecta-go-postgis:local
     environment:
       POSTGRES_DB: trayecta
       POSTGRES_USER: trayecta
@@ -15,52 +16,134 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./datos/postgres:/var/lib/postgresql/data
+      - postgres-datos:/var/lib/postgresql/data
+      - ./postgres-init/01-bd-pruebas.sql:/docker-entrypoint-initdb.d/02-bd-pruebas.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U trayecta"]
-      interval: 10s
-      retries: 5
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U trayecta -d trayecta"]
+      interval: 5s
+      retries: 20
 
   rabbitmq:
-    image: rabbitmq:3.13-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    image: rabbitmq:4.3.7-management
+    hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: trayecta
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-solo-local}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-datos:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 10
 
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+  # start-dev usa una base dev-file dentro del contenedor: cada contenedor nuevo reimporta el realm.
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    build: ../identidad
+    image: trayecta-go-keycloak:local
     command: ["start-dev", "--import-realm"]
     environment:
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: http://host.docker.internal:8081
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-solo-local}
     ports:
       - "8081:8080"
-    volumes:
-      - ./keycloak:/opt/keycloak/data/import:ro
+    depends_on:
+      - mailpit
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3"
+      interval: 10s
+      retries: 30
+      start_period: 60s
 
   valhalla:
-    # Imagen con scripts que generan los tiles desde el .pbf de ./datos/osm. Verificar nombre y versión vigentes (HU-0.1).
-    image: ghcr.io/valhalla/valhalla-scripted:latest
-    ports:
-      - "8002:8002"
+    image: ghcr.io/valhalla/valhalla-scripted:3.9.1
     environment:
-      tile_urls: ""
-      use_tiles_ignore_pbf: "False"
+      tile_urls: https://download.geofabrik.de/south-america/colombia-latest.osm.pbf
+      server_threads: "4"
       build_elevation: "False"
       build_admins: "True"
       build_time_zones: "True"
+    ports:
+      - "8002:8002"
     volumes:
-      - ./datos/osm:/custom_files
+      - valhalla-datos:/custom_files
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/status"]
+      interval: 30s
+      retries: 3
+      start_period: 90m
 
   photon:
-    # Geocodificador con datos de Colombia. Verificar imagen mantenida y su forma de importar datos (HU-0.1).
-    image: rtuszik/photon-docker:latest
+    build: ../imagenes/photon
+    image: trayecta-go-photon:local
+    environment:
+      JAVA_OPTS: -Xmx2g
     ports:
       - "2322:2322"
-    environment:
-      COUNTRY_CODE: co
     volumes:
-      - ./datos/photon:/photon/photon_data
+      - photon-datos:/photon/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:2322/status"]
+      interval: 30s
+      retries: 3
+      start_period: 30m
+
+  # Compila y prueba el backend dentro de Docker (perfil herramientas).
+  herramientas:
+    image: gradle:9.7.1-jdk21-noble
+    profiles: [herramientas]
+    working_dir: /trabajo/backend
+    environment:
+      GRADLE_USER_HOME: /home/gradle/.gradle
+    volumes:
+      - ..:/trabajo
+      - gradle-cache:/home/gradle/.gradle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nodo:
+    image: node:24.22.2-alpine3.24
+    profiles: [herramientas]
+    working_dir: /trabajo
+    volumes:
+      - ..:/trabajo
+
+  # Pruebas E2E de identidad y API (perfil e2e).
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    profiles: [e2e]
+    working_dir: /trabajo/pruebas-e2e
+    ipc: host
+    command: ["sh", "-c", "npm ci && npx playwright test"]
+    environment:
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://host.docker.internal:8081}
+      MAILPIT_URL: ${MAILPIT_URL:-http://mailpit:8025}
+      API_URL: ${API_URL:-http://backend:8080}
+    volumes:
+      - ..:/trabajo
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres-datos:
+  rabbitmq-datos:
+  valhalla-datos:
+  photon-datos:
+  gradle-cache:

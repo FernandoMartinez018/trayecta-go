@@ -130,6 +130,10 @@ Todo corre en Docker; el PC solo necesita Docker Desktop. En Git Bash, antepón 
 # Entorno local
 docker compose -f entorno-local/compose.yaml up -d --build
 
+# Backend: pruebas e imagen local (detalles en entorno-local/README.md)
+docker compose -f entorno-local/compose.yaml --profile herramientas run --rm herramientas ./gradlew test
+docker compose -f entorno-local/compose.yaml --profile herramientas run --rm herramientas ./gradlew jibBuildTar -Djib.from.platforms=linux/amd64 -Djib.to.image=trayecta-go-backend:local -PversionApp=local
+
 # Pruebas E2E (identidad y API)
 docker compose -f entorno-local/compose.yaml --profile e2e run --rm e2e
 
@@ -140,4 +144,4 @@ docker compose -f entorno-local/compose.yaml --profile herramientas run --rm nod
 docker compose -f entorno-local/compose.yaml down
 ```
 
-Los comandos del backend, la app y el tema se agregan con sus historias (HU-0.2, HU-0.4 y HU-0.5).
+Los comandos de la app y del tema se agregan con sus historias (HU-0.4 y HU-0.5).

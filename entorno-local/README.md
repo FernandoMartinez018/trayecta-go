@@ -41,7 +41,15 @@ Para ver el avance: `docker compose -f entorno-local/compose.yaml ps` (todo debe
 En Git Bash, antepón `MSYS_NO_PATHCONV=1` a los comandos que pasan rutas del contenedor.
 
 ```bash
-# E2E de identidad (Keycloak + Mailpit levantados)
+# Backend: pruebas (usan la base trayecta_pruebas, que se trunca)
+docker compose -f entorno-local/compose.yaml --profile herramientas run --rm herramientas ./gradlew test
+
+# Backend: imagen local (una sola arquitectura) y arranque en http://localhost:8080
+docker compose -f entorno-local/compose.yaml --profile herramientas run --rm herramientas ./gradlew jibBuildTar -Djib.from.platforms=linux/amd64 -Djib.to.image=trayecta-go-backend:local -PversionApp=local
+docker load -i backend/build/jib-image.tar
+docker compose -f entorno-local/compose.yaml --profile app up -d backend
+
+# E2E de identidad y API (Keycloak, Mailpit y, para la API, el backend levantados)
 docker compose -f entorno-local/compose.yaml --profile e2e run --rm e2e
 ```
 

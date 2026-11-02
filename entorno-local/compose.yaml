@@ -105,6 +105,26 @@ services:
       retries: 3
       start_period: 30m
 
+  # Imagen local del backend (perfil app). Se construye con Jib: ver entorno-local/README.md.
+  backend:
+    image: trayecta-go-backend:local
+    profiles: [app]
+    environment:
+      ENTORNO: local
+      DB_URL: jdbc:postgresql://postgres:5432/trayecta
+      DB_USUARIO: trayecta
+      DB_CLAVE: ${POSTGRES_PASSWORD:-solo-local}
+      # iss = KC_HOSTNAME de Keycloak; las llaves se descargan por la red interna.
+      OIDC_ISSUER: http://host.docker.internal:8081/realms/trayecta-go
+      OIDC_JWKS_URL: http://keycloak:8080/realms/trayecta-go/protocol/openid-connect/certs
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   # Compila y prueba el backend dentro de Docker (perfil herramientas).
   herramientas:
     image: gradle:9.7.1-jdk21-noble
@@ -112,9 +132,13 @@ services:
     working_dir: /trabajo/backend
     environment:
       GRADLE_USER_HOME: /home/gradle/.gradle
+      PRUEBAS_DB_URL: jdbc:postgresql://postgres:5432/trayecta_pruebas
     volumes:
       - ..:/trabajo
       - gradle-cache:/home/gradle/.gradle
+    depends_on:
+      postgres:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

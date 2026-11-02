@@ -2,33 +2,58 @@ name: Backend
 
 on:
   pull_request:
-    paths: ["backend/**", "contratos/**"]
+    paths: ["backend/**", "contratos/**", ".github/workflows/ci-backend.yml"]
   push:
     branches: [main]
-    paths: ["backend/**", "contratos/**"]
+    paths: ["backend/**", "contratos/**", ".github/workflows/ci-backend.yml"]
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  compilar-y-probar:
-    # Se activa cuando la HU-0.2 cree el proyecto Gradle.
-    if: ${{ hashFiles('backend/gradlew') != '' }}
-    runs-on: ubuntu-latest
+  probar-y-publicar:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
     defaults:
       run:
         working-directory: backend
+    services:
+      # La imagen oficial solo existe para amd64, que es lo que usan los runners.
+      # Base efímera que solo escucha en el runner: autenticación trust, sin clave escrita en el repo.
+      db:
+        image: postgis/postgis:16-3.6
+        env:
+          POSTGRES_USER: trayecta
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: trayecta_pruebas
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U trayecta -d trayecta_pruebas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PRUEBAS_DB_URL: jdbc:postgresql://localhost:5432/trayecta_pruebas
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v4
+          cache: gradle
+
       - name: Pruebas
-        run: ./gradlew test
-      - name: Imagen de contenedor (solo main)
-        if: github.ref == 'refs/heads/main'
-        # La HU-0.2 define cómo se construye y publica la imagen multi-arquitectura en ghcr.io.
-        run: echo "Pendiente HU-0.2"
+        run: ./gradlew test --console=plain
+
+      - name: Publicar imagen amd64 + arm64 en ghcr (solo main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: >
+          ./gradlew jib --console=plain
+          -PversionApp=sha-${GITHUB_SHA::7}
+          -Djib.to.tags=sha-${GITHUB_SHA::7},main
+          -Djib.to.auth.username=${{ github.actor }}
+          -Djib.to.auth.password=${{ secrets.GITHUB_TOKEN }}

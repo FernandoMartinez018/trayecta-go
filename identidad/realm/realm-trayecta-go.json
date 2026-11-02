@@ -1,0 +1,228 @@
+{
+  "realm": "trayecta-go",
+  "displayName": "Trayecta Go",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "bruteForceProtected": true,
+  "eventsEnabled": true,
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "es"
+  ],
+  "defaultLocale": "es",
+  "loginTheme": "trayecta",
+  "accessTokenLifespan": 300,
+  "offlineSessionIdleTimeout": 2592000,
+  "browserFlow": "trayecta-browser",
+  "smtpServer": {
+    "host": "${SMTP_HOST:mailpit}",
+    "port": "${SMTP_PORT:1025}",
+    "from": "${SMTP_FROM:no-responder@trayecta.test}",
+    "fromDisplayName": "Trayecta Go",
+    "auth": "${SMTP_AUTH:false}",
+    "user": "${SMTP_USER:}",
+    "password": "${SMTP_PASSWORD:}",
+    "starttls": "${SMTP_STARTTLS:false}",
+    "ssl": "false"
+  },
+  "clients": [
+    {
+      "clientId": "app-movil",
+      "name": "Trayecta Go (app móvil)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "co.trayectago.app:/oauth2redirect",
+        "co.trayectago.app.pruebas:/oauth2redirect"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "audiencia-trayecta-go-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "trayecta-go-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "trayecta-primer-ingreso-google",
+      "config": {
+        "clientId": "${GOOGLE_CLIENT_ID:no-configurado}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET:no-configurado}",
+        "syncMode": "IMPORT",
+        "defaultScope": "openid profile email"
+      }
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "trayecta-browser",
+      "description": "Cookie, Google o enlace al correo",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "identity-provider-redirector",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "trayecta-enlace",
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 30,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "trayecta-enlace",
+      "description": "Enlace al correo en modo continuación",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "magic-link-continuation-form",
+          "authenticatorConfig": "trayecta-enlace-config",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "trayecta-primer-ingreso-google",
+      "description": "Primer ingreso con Google: crea la cuenta o la vincula por correo",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "idp-review-profile",
+          "authenticatorConfig": "trayecta-revisar-perfil",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "trayecta-crear-o-vincular",
+          "authenticatorFlow": true,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "trayecta-crear-o-vincular",
+      "description": "Crea la cuenta si es nueva; si el correo ya existe, la vincula",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "idp-create-user-if-unique",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "idp-auto-link",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "trayecta-enlace-config",
+      "config": {
+        "ext-magic-create-nonexistent-user": "true",
+        "TIMEOUT": "10"
+      }
+    },
+    {
+      "alias": "trayecta-revisar-perfil",
+      "config": {
+        "update.profile.on.first.login": "missing"
+      }
+    }
+  ],
+  "localizationTexts": {
+    "es": {
+      "magicLinkContinuationSubject": "Tu enlace para entrar a {0}",
+      "magicLinkContinuationBody": "Pediste un enlace para entrar a {0}.\n\nToca este enlace para entrar:\n\n{1}\n\nSi no lo pediste, ignora este correo.",
+      "magicLinkContinuationBodyHtml": "<p>Pediste un enlace para entrar a {0}.</p><p><a href=\"{1}\">Toca este enlace para entrar</a>.</p><p>Si no lo pediste, ignora este correo.</p>",
+      "magicLinkContinuationConfirmation": "Revisa tu correo y toca el enlace para entrar. No cierres esta pestaña.",
+      "magicLinkContinuationWaiting": "Esperando tu confirmación… Revisa tu correo.",
+      "magicLinkContinuationExpired": "Tu enlace venció. Pide uno nuevo.",
+      "magicLinkSuccessfulLogin": "Listo. Vuelve a Trayecta Go y toca «Continuar».",
+      "magicLinkFailLogin": "Tu solicitud venció. Vuelve a Trayecta Go y pide un enlace nuevo.",
+      "trayectaMlcConfirmed": "¡Listo! Toca «Continuar» para volver a Trayecta Go."
+    }
+  },
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}}},{\"name\":\"email\",\"displayName\":\"${email}\",\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"validations\":{\"email\":{},\"length\":{\"max\":255}}},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}}},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}}}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+          ]
+        }
+      }
+    ]
+  }
+}

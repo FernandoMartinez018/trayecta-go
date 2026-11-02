@@ -44,10 +44,13 @@ Fuentes de verdad dentro de este repositorio:
 contratos/openapi/v1.yaml     API REST (fuente de verdad)
 contratos/asyncapi/v1.yaml    Eventos de RabbitMQ (CloudEvents)
 backend/                      Kotlin + Ktor, monolito modular
-app/                          Kotlin Multiplatform: shared/, androidApp/, iosApp/
+app/                          Kotlin Multiplatform: shared/, androidApp/ (iosApp/ en producción)
+identidad/                    Imagen de Keycloak: realm, tema y extensión del enlace mágico
+imagenes/                     Imágenes propias: PostGIS (amd64 + arm64) y Photon (solo Colombia)
+pruebas-e2e/                  Pruebas de extremo a extremo con Playwright
 web/                          Landing y política de privacidad (Vercel)
 diseno/                       tokens.json y script de conversión a temas
-entorno-local/                Docker Compose para desarrollo
+entorno-local/                Docker Compose para desarrollo y pruebas
 ```
 
 La infraestructura y los despliegues viven en otro repositorio: `trayecta-go-infra`.
@@ -69,7 +72,7 @@ El mismo código corre en dos entornos; **solo cambia la configuración**:
 | | `pruebas` (gratis) | `produccion` |
 |---|---|---|
 | Servidores | VM Oracle Cloud Always Free (Docker Compose) | GCP us-east1 (Cloud Run + VM) |
-| Almacenamiento | MinIO o disco local, vía API S3 | Cloudflare R2 / GCS, vía API S3 |
+| Almacenamiento | Object Storage de Oracle, vía API S3 | Cloudflare R2 / GCS, vía API S3 |
 | HTTPS | Caddy + subdominio DuckDNS | Dominio propio + Cloudflare |
 | App | APK por Firebase App Distribution | Google Play / App Store |
 
@@ -119,19 +122,22 @@ Reglas para que esto funcione:
 - No hacer `push` directo a `main`.
 - No escribir datos personales reales en pruebas, ejemplos ni logs.
 
-## Comandos (se completan en el hito H0)
+## Comandos
+
+Todo corre en Docker; el PC solo necesita Docker Desktop. En Git Bash, antepón `MSYS_NO_PATHCONV=1` a los comandos que pasan rutas del contenedor. Primer arranque y tiempos: `entorno-local/README.md`.
 
 ```bash
 # Entorno local
-docker compose -f entorno-local/compose.yaml up -d
+docker compose -f entorno-local/compose.yaml up -d --build
 
-# Backend
-cd backend && ./gradlew test
-cd backend && ./gradlew run
-
-# App Android
-cd app && ./gradlew :androidApp:assembleDebug
+# Pruebas E2E (identidad y API)
+docker compose -f entorno-local/compose.yaml --profile e2e run --rm e2e
 
 # Contratos
-npx @redocly/cli lint contratos/openapi/v1.yaml
+docker compose -f entorno-local/compose.yaml --profile herramientas run --rm nodo npx --yes @redocly/cli@1.25.11 lint contratos/openapi/v1.yaml
+
+# Apagar (sin -v, para conservar mapas y bases)
+docker compose -f entorno-local/compose.yaml down
 ```
+
+Los comandos del backend, la app y el tema se agregan con sus historias (HU-0.2, HU-0.4 y HU-0.5).

@@ -22,6 +22,7 @@ jobs:
         imagen:
           - { nombre: postgis, contexto: imagenes/postgis, version: "16.15-3.6.4" }
           - { nombre: photon, contexto: imagenes/photon, version: "1.3.0" }
+          - { nombre: keycloak, contexto: identidad, version: "26.8.1-0.94" }
     steps:
       - uses: actions/checkout@v7
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fondo de la ventana en color de marca mientras carga Compose: evita el destello blanco. -->
+    <style name="Theme.TrayectaGo" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/marca</item>
+    </style>
+</resources>

@@ -1,26 +1,32 @@
 package co.trayectago.app.ui
 
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
 import co.trayectago.app.ConfiguracionApp
 import co.trayectago.app.api.ClienteApi
 import co.trayectago.app.api.motorHttp
 import co.trayectago.app.auth.Autenticador
 import co.trayectago.app.estado.ControladorApp
 import co.trayectago.app.estado.Pantalla
+import co.trayectago.app.tema.TemaTrayecta
+import co.trayectago.app.tema.Trayecta
 
 @Composable
 fun App(config: ConfiguracionApp, autenticador: Autenticador) {
-    MaterialTheme {
-        if (config.urlApi.isBlank() || config.urlAuth.isBlank()) {
-            PantallaError(Textos.FALTA_CONFIGURACION, cuerpo = null, alReintentar = null)
-        } else {
-            Navegacion(config, autenticador)
+    TemaTrayecta {
+        Surface(Modifier.fillMaxSize(), color = Trayecta.colores.surface, contentColor = Trayecta.colores.ink) {
+            if (config.urlApi.isBlank() || config.urlAuth.isBlank()) {
+                PantallaError(Textos.FALTA_CONFIGURACION, cuerpo = null, alReintentar = null)
+            } else {
+                Navegacion(config, autenticador)
+            }
         }
     }
 }

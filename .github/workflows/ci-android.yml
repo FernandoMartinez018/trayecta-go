@@ -19,6 +19,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: El tema generado coincide con tokens.json
+        working-directory: .
+        run: |
+          node --test 'diseno/*.test.mjs'
+          node diseno/generar-tema.mjs
+          git diff --exit-code app/shared/src/commonMain/kotlin/co/trayectago/app/tema/TemaGenerado.kt
+
       - uses: actions/setup-java@v6
         with:
           distribution: temurin

@@ -137,6 +137,10 @@ docker compose -f entorno-local/compose.yaml --profile herramientas run --rm her
 # App Android: pruebas, lint y APK de pruebas (las URL entran por -PurlApi/-PurlAuth o URL_API_PRUEBAS/URL_AUTH_PRUEBAS)
 docker compose -f entorno-local/compose.yaml --profile herramientas run --rm android ./gradlew :shared:testAndroidHostTest :androidApp:lintPruebasDebug :androidApp:assemblePruebasDebug -PurlApi=https://api.ejemplo.invalid -PurlAuth=https://auth.ejemplo.invalid
 
+# Tema: pruebas del generador y regeneración de TemaGenerado.kt desde diseno/tokens.json
+docker compose -f entorno-local/compose.yaml --profile herramientas run --rm nodo node --test 'diseno/*.test.mjs'
+docker compose -f entorno-local/compose.yaml --profile herramientas run --rm nodo node diseno/generar-tema.mjs
+
 # Pruebas E2E (identidad y API)
 docker compose -f entorno-local/compose.yaml --profile e2e run --rm e2e
 
@@ -147,4 +151,4 @@ docker compose -f entorno-local/compose.yaml --profile herramientas run --rm nod
 docker compose -f entorno-local/compose.yaml down
 ```
 
-El comando del tema se agrega con la HU-0.5. Las dependencias de Gradle están bloqueadas (`gradle.lockfile`); al cambiar una versión, regenera con `./gradlew dependencies --write-locks` (backend) o `./gradlew :shared:dependencies :androidApp:dependencies --write-locks` (app).
+Las dependencias de Gradle están bloqueadas (`gradle.lockfile`); al cambiar una versión, regenera con `./gradlew dependencies --write-locks` (backend) o `./gradlew :shared:dependencies :androidApp:dependencies --write-locks` (app).

@@ -10,26 +10,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
+import co.trayectago.app.tema.Espacios
+import co.trayectago.app.tema.Tamanos
+import co.trayectago.app.tema.Trayecta
 
 /** Estado de error con reintento opcional (patrón de la pantalla 20). */
 @Composable
 fun PantallaError(titulo: String, cuerpo: String?, alReintentar: (() -> Unit)?) {
     Column(
-        Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp, alignment = Alignment.CenterVertically),
+        Modifier.fillMaxSize().safeDrawingPadding().padding(Espacios.space5),
+        verticalArrangement = Arrangement.spacedBy(Espacios.space3, alignment = Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(titulo, style = MaterialTheme.typography.titleLarge)
-        if (cuerpo != null) Text(cuerpo, style = MaterialTheme.typography.bodyLarge)
+        Text(titulo, style = Trayecta.estilos.titleLg, textAlign = TextAlign.Center)
+        if (cuerpo != null) {
+            Text(cuerpo, style = Trayecta.estilos.body, color = Trayecta.colores.inkMuted, textAlign = TextAlign.Center)
+        }
         if (alReintentar != null) {
-            Button(onClick = alReintentar, Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-                Text(Textos.REINTENTAR)
+            Button(onClick = alReintentar, Modifier.fillMaxWidth().heightIn(min = Tamanos.touchMin)) {
+                Text(Textos.REINTENTAR, style = Trayecta.estilos.button)
             }
         }
     }
@@ -39,6 +43,6 @@ fun PantallaError(titulo: String, cuerpo: String?, alReintentar: (() -> Unit)?) 
 @Composable
 fun PantallaCargando() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator()
+        CircularProgressIndicator(color = Trayecta.colores.brand)
     }
 }

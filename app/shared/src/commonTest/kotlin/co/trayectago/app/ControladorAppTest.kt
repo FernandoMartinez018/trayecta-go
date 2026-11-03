@@ -8,10 +8,12 @@ import co.trayectago.app.ui.Textos
 import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -91,6 +93,33 @@ class ControladorAppTest {
         advanceUntilIdle()
 
         assertEquals(Pantalla.Registro(), c.pantalla.value)
+    }
+
+    @Test
+    fun `resultado de un ingreso anterior no reemplaza el ingreso más reciente`() = runTest {
+        val primero = CompletableDeferred<ResultadoIngreso>()
+        val segundo = CompletableDeferred<ResultadoIngreso>()
+        var intentos = 0
+        val autenticador = AutenticadorFalso(sesion = false)
+        val api = ServidorFalso(StandardTestDispatcher(testScheduler), respuestaUsuario()).cliente(autenticador)
+        val control = ControladorApp(api, object : co.trayectago.app.auth.Autenticador by autenticador {
+            override suspend fun iniciarSesion(opcion: OpcionIngreso): ResultadoIngreso {
+                autenticador.opciones += opcion
+                return if (intentos++ == 0) primero.await() else segundo.await()
+            }
+        }, this)
+
+        control.ingresar(OpcionIngreso.Google)
+        runCurrent()
+        control.ingresar(OpcionIngreso.General)
+        runCurrent()
+        segundo.complete(ResultadoIngreso.Cancelado)
+        runCurrent()
+        assertEquals(Pantalla.Registro(), control.pantalla.value)
+        primero.complete(ResultadoIngreso.Exito)
+        advanceUntilIdle()
+
+        assertEquals(Pantalla.Registro(), control.pantalla.value)
     }
 
     @Test

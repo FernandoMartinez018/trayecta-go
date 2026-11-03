@@ -33,6 +33,7 @@ class ControladorApp(
     private val alcance: CoroutineScope,
 ) {
     private val estado = MutableStateFlow<Pantalla>(Pantalla.Splash)
+    private var intentoIngreso = 0
     val pantalla: StateFlow<Pantalla> = estado.asStateFlow()
 
     fun arrancar() {
@@ -52,12 +53,15 @@ class ControladorApp(
             is OpcionIngreso.Correo -> if (correoValido(opcion.correo)) OpcionIngreso.Correo(opcion.correo.trim()) else return
             else -> opcion
         }
+        val intento = ++intentoIngreso
         alcance.launch {
-            estado.value = when (autenticador.iniciarSesion(elegida)) {
+            val resultado = autenticador.iniciarSesion(elegida)
+            val destino = when (resultado) {
                 ResultadoIngreso.Exito -> destinoDeSesion()
                 ResultadoIngreso.Cancelado -> Pantalla.Registro()
                 is ResultadoIngreso.Fallo -> Pantalla.Registro(error = Textos.ERROR_INGRESO)
             }
+            if (intento == intentoIngreso) estado.value = destino
         }
     }
 

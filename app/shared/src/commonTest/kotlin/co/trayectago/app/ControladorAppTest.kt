@@ -94,6 +94,28 @@ class ControladorAppTest {
     }
 
     @Test
+    fun `correo inválido no inicia el ingreso`() = runTest {
+        val autenticador = AutenticadorFalso(sesion = false)
+        val c = controlador(autenticador)
+
+        c.ingresar(OpcionIngreso.Correo("ana@"))
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), autenticador.opciones)
+    }
+
+    @Test
+    fun `correo válido se envía recortado`() = runTest {
+        val autenticador = AutenticadorFalso(sesion = false)
+        val c = controlador(autenticador)
+
+        c.ingresar(OpcionIngreso.Correo(" ana@correo.com "))
+        advanceUntilIdle()
+
+        assertEquals(listOf<OpcionIngreso>(OpcionIngreso.Correo("ana@correo.com")), autenticador.opciones)
+    }
+
+    @Test
     fun `ingreso fallido muestra el error de ingreso`() = runTest {
         val autenticador = AutenticadorFalso(sesion = false).apply { resultadoIngreso = ResultadoIngreso.Fallo(sinConexion = true) }
         val c = controlador(autenticador)

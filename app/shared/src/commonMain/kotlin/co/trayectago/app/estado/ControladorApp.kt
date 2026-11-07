@@ -3,6 +3,7 @@ package co.trayectago.app.estado
 import co.trayectago.app.api.ClienteApi
 import co.trayectago.app.api.ErrorApi
 import co.trayectago.app.api.Usuario
+import co.trayectago.app.api.Vehiculo
 import co.trayectago.app.auth.Autenticador
 import co.trayectago.app.auth.OpcionIngreso
 import co.trayectago.app.auth.ResultadoIngreso
@@ -23,6 +24,7 @@ sealed interface Pantalla {
     data object Splash : Pantalla
     data class Registro(val error: String? = null) : Pantalla
     data class Inicio(val usuario: Usuario) : Pantalla
+    data class Vehiculo(val guardando: Boolean = false, val error: String? = null) : Pantalla
     data object SinConexion : Pantalla
 }
 
@@ -40,7 +42,7 @@ class ControladorApp(
         val desdeSplash = estado.value == Pantalla.Splash
         alcance.launch {
             val pausa = if (desdeSplash) launch { delay(SPLASH_MINIMO_MS) } else null
-            val destino = destinoDeSesion()
+            val destino = destinoDeSesionConVehiculo()
             pausa?.join()
             estado.value = destino
         }
@@ -57,11 +59,25 @@ class ControladorApp(
         alcance.launch {
             val resultado = autenticador.iniciarSesion(elegida)
             val destino = when (resultado) {
-                ResultadoIngreso.Exito -> destinoDeSesion()
+                ResultadoIngreso.Exito -> destinoDeSesionConVehiculo()
                 ResultadoIngreso.Cancelado -> Pantalla.Registro()
                 is ResultadoIngreso.Fallo -> Pantalla.Registro(error = Textos.ERROR_INGRESO)
             }
             if (intento == intentoIngreso) estado.value = destino
+        }
+    }
+
+    fun guardarVehiculo(digito: Int, parrillero: Boolean) {
+        alcance.launch {
+            estado.value = Pantalla.Vehiculo(guardando = true)
+            try {
+                api.guardarVehiculo(Vehiculo(ultimoDigitoPlaca = digito, llevaParrillero = parrillero))
+                estado.value = destinoDeSesionConVehiculo()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                estado.value = Pantalla.Vehiculo(error = Textos.ERROR_GUARDAR_VEHICULO)
+            }
         }
     }
 
@@ -72,10 +88,11 @@ class ControladorApp(
         }
     }
 
-    private suspend fun destinoDeSesion(): Pantalla {
+    private suspend fun destinoDeSesionConVehiculo(): Pantalla {
         if (!autenticador.haySesion()) return Pantalla.Registro()
         return try {
-            Pantalla.Inicio(api.yo())
+            val usuario = api.yo()
+            if (api.vehiculo() == null) Pantalla.Vehiculo() else Pantalla.Inicio(usuario)
         } catch (e: ErrorApi.NoAutenticado) {
             autenticador.cerrarSesion()
             Pantalla.Registro()

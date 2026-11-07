@@ -21,8 +21,13 @@ import kotlin.test.assertIs
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ControladorAppTest {
-    private fun TestScope.controlador(autenticador: AutenticadorFalso, manejador: MockRequestHandler = respuestaUsuario()) =
-        ControladorApp(ServidorFalso(StandardTestDispatcher(testScheduler), manejador).cliente(autenticador), autenticador, this)
+    private fun TestScope.controlador(autenticador: AutenticadorFalso, manejador: MockRequestHandler = { peticion ->
+        if (peticion.url.encodedPath == "/v1/me/vehiculo") {
+            respond("""{"tipo":"moto","ultimoDigitoPlaca":4,"llevaParrillero":false}""", HttpStatusCode.OK, JSON)
+        } else {
+            respond(USUARIO_JSON, HttpStatusCode.OK, JSON)
+        }
+    }) = ControladorApp(ServidorFalso(StandardTestDispatcher(testScheduler), manejador).cliente(autenticador), autenticador, this)
 
     @Test
     fun `sin sesión va a Registro`() = runTest {
@@ -120,6 +125,72 @@ class ControladorAppTest {
         advanceUntilIdle()
 
         assertEquals(Pantalla.Registro(), control.pantalla.value)
+    }
+
+    @Test
+    fun `sin vehículo va a la pantalla Vehiculo`() = runTest {
+        val servidor = ServidorFalso(StandardTestDispatcher(testScheduler)) {
+            if (it.url.encodedPath == "/v1/me/vehiculo") respond("""{"title":"No encontrado","status":404}""", HttpStatusCode.NotFound, PROBLEM_JSON)
+            else respond(USUARIO_JSON, HttpStatusCode.OK, JSON)
+        }
+        val autenticador = AutenticadorFalso()
+        val c = ControladorApp(servidor.cliente(autenticador), autenticador, this)
+
+        c.arrancar()
+        advanceUntilIdle()
+
+        assertEquals(Pantalla.Vehiculo(), c.pantalla.value)
+    }
+
+    @Test
+    fun `guardar con éxito avanza`() = runTest {
+        val servidor = ServidorFalso(StandardTestDispatcher(testScheduler)) {
+            if (it.url.encodedPath == "/v1/me/vehiculo") respond("""{"tipo":"moto","ultimoDigitoPlaca":4,"llevaParrillero":false}""", HttpStatusCode.OK, JSON)
+            else respond(USUARIO_JSON, HttpStatusCode.OK, JSON)
+        }
+        val autenticador = AutenticadorFalso()
+        val c = ControladorApp(servidor.cliente(autenticador), autenticador, this)
+
+        c.guardarVehiculo(4, false)
+        advanceUntilIdle()
+
+        assertIs<Pantalla.Inicio>(c.pantalla.value)
+    }
+
+    @Test
+    fun `un guardado tardío no revierte el cierre de sesión`() = runTest {
+        val terminarGuardado = CompletableDeferred<Unit>()
+        val servidor = ServidorFalso(StandardTestDispatcher(testScheduler)) { peticion ->
+            if (peticion.url.encodedPath == "/v1/me/vehiculo") {
+                terminarGuardado.await()
+                respond("""{"tipo":"moto","ultimoDigitoPlaca":4,"llevaParrillero":false}""", HttpStatusCode.OK, JSON)
+            } else {
+                respond(USUARIO_JSON, HttpStatusCode.OK, JSON)
+            }
+        }
+        val autenticador = AutenticadorFalso()
+        val c = ControladorApp(servidor.cliente(autenticador), autenticador, this)
+
+        c.guardarVehiculo(4, false)
+        runCurrent()
+        c.cerrarSesion()
+        runCurrent()
+        terminarGuardado.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(Pantalla.Registro(), c.pantalla.value)
+    }
+
+    @Test
+    fun `guardar sin conexión se queda con el error`() = runTest {
+        val servidor = ServidorFalso(StandardTestDispatcher(testScheduler)) { throw kotlinx.io.IOException("sin red") }
+        val autenticador = AutenticadorFalso()
+        val c = ControladorApp(servidor.cliente(autenticador), autenticador, this)
+
+        c.guardarVehiculo(4, false)
+        advanceUntilIdle()
+
+        assertEquals(Pantalla.Vehiculo(error = Textos.ERROR_GUARDAR_VEHICULO), c.pantalla.value)
     }
 
     @Test

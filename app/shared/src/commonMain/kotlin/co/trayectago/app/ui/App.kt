@@ -15,26 +15,27 @@ import co.trayectago.app.api.motorHttp
 import co.trayectago.app.auth.Autenticador
 import co.trayectago.app.estado.ControladorApp
 import co.trayectago.app.estado.Pantalla
+import co.trayectago.app.permisos.GestorPermisos
 import co.trayectago.app.tema.TemaTrayecta
 import co.trayectago.app.tema.Trayecta
 
 @Composable
-fun App(config: ConfiguracionApp, autenticador: Autenticador) {
+fun App(config: ConfiguracionApp, autenticador: Autenticador, permisos: GestorPermisos) {
     TemaTrayecta {
         Surface(Modifier.fillMaxSize(), color = Trayecta.colores.surface, contentColor = Trayecta.colores.ink) {
             if (config.urlApi.isBlank() || config.urlAuth.isBlank()) {
                 PantallaError(Textos.FALTA_CONFIGURACION, cuerpo = null, alReintentar = null)
             } else {
-                Navegacion(config, autenticador)
+                Navegacion(config, autenticador, permisos)
             }
         }
     }
 }
 
 @Composable
-private fun Navegacion(config: ConfiguracionApp, autenticador: Autenticador) {
+private fun Navegacion(config: ConfiguracionApp, autenticador: Autenticador, permisos: GestorPermisos) {
     val alcance = rememberCoroutineScope()
-    val controlador = remember { ControladorApp(ClienteApi(config.urlApi, autenticador, motorHttp()), autenticador, alcance) }
+    val controlador = remember { ControladorApp(ClienteApi(config.urlApi, autenticador, motorHttp()), autenticador, permisos, alcance) }
     LaunchedEffect(controlador) { controlador.arrancar() }
     val pantalla by controlador.pantalla.collectAsState()
 
@@ -42,6 +43,8 @@ private fun Navegacion(config: ConfiguracionApp, autenticador: Autenticador) {
         Pantalla.Splash -> PantallaCargando()
         is Pantalla.Registro -> PantallaRegistro(actual.error, alIngresar = controlador::ingresar)
         is Pantalla.Inicio -> PantallaInicio(alCerrarSesion = controlador::cerrarSesion)
+        is Pantalla.Vehiculo -> PantallaVehiculo(actual, controlador::guardarVehiculo)
+        is Pantalla.Permisos -> PantallaPermisos(actual, controlador::solicitarPermiso, controlador::terminarPermisos)
         Pantalla.SinConexion -> PantallaError(Textos.SIN_CONEXION_TITULO, Textos.SIN_CONEXION_CUERPO, controlador::reintentar)
     }
 }

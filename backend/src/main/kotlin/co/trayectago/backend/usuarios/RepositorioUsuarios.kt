@@ -3,6 +3,7 @@ package co.trayectago.backend.usuarios
 import co.trayectago.backend.comun.jsonTrayecta
 import java.sql.Connection
 import java.time.OffsetDateTime
+import java.util.UUID
 import javax.sql.DataSource
 import kotlin.random.Random
 
@@ -44,6 +45,39 @@ class RepositorioUsuarios(private val ds: DataSource) {
                     preferencias = jsonTrayecta.decodeFromString(Preferencias.serializer(), r.getString(3)),
                     creadoEn = r.getObject(4, OffsetDateTime::class.java).toInstant().toString(),
                 )
+            }
+        }
+    }
+
+    fun obtenerVehiculo(usuarioId: UUID): Vehiculo? = ds.connection.use { c ->
+        c.prepareStatement("SELECT tipo, ultimo_digito_placa, lleva_parrillero FROM vehiculo WHERE usuario_id = ? AND activo").use {
+            it.setObject(1, usuarioId)
+            it.executeQuery().use { r ->
+                if (!r.next()) null else Vehiculo(r.getString(1), r.getInt(2), r.getBoolean(3))
+            }
+        }
+    }
+
+    fun guardarVehiculo(usuarioId: UUID, vehiculo: Vehiculo): Vehiculo = ds.connection.use { c ->
+        c.prepareStatement(
+            """
+            INSERT INTO vehiculo (usuario_id, tipo, ultimo_digito_placa, lleva_parrillero)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (usuario_id) WHERE activo DO UPDATE SET
+                tipo = EXCLUDED.tipo,
+                ultimo_digito_placa = EXCLUDED.ultimo_digito_placa,
+                lleva_parrillero = EXCLUDED.lleva_parrillero,
+                actualizado_en = now()
+            RETURNING tipo, ultimo_digito_placa, lleva_parrillero
+            """.trimIndent(),
+        ).use {
+            it.setObject(1, usuarioId)
+            it.setString(2, vehiculo.tipo)
+            it.setInt(3, vehiculo.ultimoDigitoPlaca)
+            it.setBoolean(4, vehiculo.llevaParrillero)
+            it.executeQuery().use { r ->
+                r.next()
+                Vehiculo(r.getString(1), r.getInt(2), r.getBoolean(3))
             }
         }
     }

@@ -3,7 +3,14 @@ package co.trayectago.app
 import co.trayectago.app.api.ErrorApi
 import co.trayectago.app.api.Problema
 import co.trayectago.app.api.Salud
+import co.trayectago.app.api.Vehiculo
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.request.get
+import io.ktor.client.request.put
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.test.runTest
@@ -27,6 +34,21 @@ class ClienteApiTest {
         servidor.cliente(AutenticadorFalso(token = "tk1")).yo()
 
         assertEquals("Bearer tk1", servidor.peticiones.single().headers[HttpHeaders.Authorization])
+    }
+
+    @Test
+    fun `vehiculo con 404 es null`() = runTest {
+        val servidor = ServidorFalso { respond("""{"title":"No encontrado","status":404}""", HttpStatusCode.NotFound, PROBLEM_JSON) }
+
+        assertEquals(null, servidor.cliente(AutenticadorFalso()).vehiculo())
+    }
+
+    @Test
+    fun `guardarVehiculo envía el JSON del contrato`() = runTest {
+        val servidor = ServidorFalso { respond("""{"tipo":"moto","ultimoDigitoPlaca":4,"llevaParrillero":true}""", HttpStatusCode.OK, JSON) }
+
+        assertEquals(Vehiculo("moto", 4, true), servidor.cliente(AutenticadorFalso()).guardarVehiculo(Vehiculo("moto", 4, true)))
+        assertEquals("{\"tipo\":\"moto\",\"ultimoDigitoPlaca\":4,\"llevaParrillero\":true}", ((servidor.peticiones.single().body as OutgoingContent.ByteArrayContent).bytes()).decodeToString())
     }
 
     @Test

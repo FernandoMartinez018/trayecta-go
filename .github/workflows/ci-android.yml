@@ -42,14 +42,48 @@ jobs:
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
 
+      # Con la llave de firma en los secretos se compila el APK release firmado; sin ella (PR de forks, o mientras no exista)
+      # se sigue compilando el APK debug, que también se instala.
+      - name: Llave de firma de pruebas y variante del APK
+        id: apk
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/pruebas.p12"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/pruebas.p12" >> "$GITHUB_ENV"
+            echo "tarea=assemblePruebasRelease" >> "$GITHUB_OUTPUT"
+            echo "variante=release" >> "$GITHUB_OUTPUT"
+          else
+            echo "tarea=assemblePruebasDebug" >> "$GITHUB_OUTPUT"
+            echo "variante=debug" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+
       - name: Pruebas, lint y APK de pruebas
-        run: ./gradlew :shared:testAndroidHostTest :androidApp:lintPruebasDebug :androidApp:assemblePruebasDebug --console=plain
+        run: ./gradlew :shared:testAndroidHostTest :androidApp:lintPruebasDebug :androidApp:${{ steps.apk.outputs.tarea }} --console=plain
         env:
           URL_API_PRUEBAS: ${{ vars.URL_API_PRUEBAS }}
           URL_AUTH_PRUEBAS: ${{ vars.URL_AUTH_PRUEBAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
 
       - uses: actions/upload-artifact@v7
         with:
           name: apk-pruebas
-          path: app/androidApp/build/outputs/apk/pruebas/debug/*.apk
+          path: app/androidApp/build/outputs/apk/pruebas/${{ steps.apk.outputs.variante }}/*.apk
           if-no-files-found: error
+
+      # Solo en main, con la firma y con FIREBASE_APP_ID: mientras no existan, este paso se omite.
+      - name: Distribuir por Firebase App Distribution
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.FIREBASE_APP_ID != '' && steps.apk.outputs.variante == 'release'
+        working-directory: .
+        env:
+          FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+          FIREBASE_TESTERS: ${{ vars.FIREBASE_TESTERS }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          NOTAS_COMMIT: ${{ github.event.head_commit.message }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/fad.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/fad.json" npx --yes firebase-tools@15.34.0 appdistribution:distribute \
+            app/androidApp/build/outputs/apk/pruebas/release/*.apk \
+            --app "$FIREBASE_APP_ID" --groups "$FIREBASE_TESTERS" --release-notes "$(printf '%s' "$NOTAS_COMMIT" | head -n 1)"

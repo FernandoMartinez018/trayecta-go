@@ -33,11 +33,29 @@ android {
         versionName = "0.1.0"
     }
 
+    // Firma del sabor `pruebas` (HU-1.5): solo si el CI entrega la llave por variables de entorno.
+    // Sin ellas, assemblePruebasRelease sale sin firmar, que es lo normal en local.
+    val rutaLlave: String? = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
+    if (rutaLlave != null) {
+        fun obligatoria(nombre: String): String =
+            providers.environmentVariable(nombre).orNull ?: error("Con ANDROID_KEYSTORE_PATH también hace falta $nombre")
+        signingConfigs {
+            create("pruebas") {
+                storeFile = file(rutaLlave)
+                storeType = "pkcs12"
+                storePassword = obligatoria("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = obligatoria("ANDROID_KEY_ALIAS")
+                keyPassword = storePassword
+            }
+        }
+    }
+
     flavorDimensions += "entorno"
     productFlavors {
         create("pruebas") {
             dimension = "entorno"
             applicationIdSuffix = ".pruebas"
+            if (rutaLlave != null) signingConfig = signingConfigs.getByName("pruebas")
             buildConfigField("String", "URL_API", "\"${urlDelEntorno("urlApi", "URL_API_PRUEBAS")}\"")
             buildConfigField("String", "URL_AUTH", "\"${urlDelEntorno("urlAuth", "URL_AUTH_PRUEBAS")}\"")
         }

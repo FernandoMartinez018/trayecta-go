@@ -56,6 +56,25 @@ object Textos {
     const val PARRILLERO_AYUDA = "Para las restricciones de parrillero"
     fun placaTerminadaEn(digito: Int) = "Placa terminada en $digito"
 
+    // Pantalla 2 (Permisos.dc.html): permisos graduales
+    const val PERMISOS_TITULO = "Para guiarte necesitamos algunos permisos"
+    const val PERMISOS_SUBTITULO = "Te explicamos para qué sirve cada uno. Puedes cambiarlos cuando quieras."
+    const val PERMISO_UBICACION = "Ubicación"
+    const val PERMISO_UBICACION_AYUDA = "Mientras usas la app, para guiarte"
+    const val PERMISO_NOTIFICACIONES = "Notificaciones"
+    const val PERMISO_NOTIFICACIONES_AYUDA = "Para avisarte a qué hora salir"
+    const val PERMISO_MICROFONO = "Micrófono"
+    const val PERMISO_MICROFONO_AYUDA = "Para manos libres, que viene activado"
+    const val PERMISO_SEGUNDO_PLANO = "Ubicación en segundo plano"
+    const val PERMISO_SEGUNDO_PLANO_AYUDA = "Solo si activas \"Aprender mis rutas\""
+    const val PERMITIR = "Permitir"
+    const val PERMITIDO = "Permitido"
+    const val AHORA_NO = "Ahora no"
+
+    // Tres botones «Permitir» seguidos: TalkBack necesita saber cuál es cuál.
+    fun permitir(permiso: String) = "Permitir ${permiso.lowercase()}"
+    fun permitido(permiso: String) = "Permitido: ${permiso.lowercase()}"
+
     // Inicio provisional: lo reemplaza la pantalla 4 (mapa) en H2.
     const val INICIO_TITULO = "Todo listo"
     const val INICIO_CUERPO = "Muy pronto verás aquí el mapa y tus rutas."

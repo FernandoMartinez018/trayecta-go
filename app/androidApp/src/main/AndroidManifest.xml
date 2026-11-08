@@ -3,6 +3,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Permisos graduales del primer uso (pantalla 2). Sin ubicación en segundo plano: solo se pedirá al activar «Aprender mis rutas». -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- AppAuth busca un navegador con Custom Tabs para abrir Keycloak. -->
     <queries>
         <intent>

@@ -8,6 +8,8 @@ import co.trayectago.app.auth.Autenticador
 import co.trayectago.app.auth.OpcionIngreso
 import co.trayectago.app.auth.ResultadoIngreso
 import co.trayectago.app.ingreso.correoValido
+import co.trayectago.app.permisos.GestorPermisos
+import co.trayectago.app.permisos.Permiso
 import co.trayectago.app.ui.Textos
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +27,7 @@ sealed interface Pantalla {
     data class Registro(val error: String? = null) : Pantalla
     data class Inicio(val usuario: Usuario) : Pantalla
     data class Vehiculo(val guardando: Boolean = false, val error: String? = null) : Pantalla
+    data class Permisos(val concedidos: Set<Permiso> = emptySet()) : Pantalla
     data object SinConexion : Pantalla
 }
 
@@ -32,6 +35,7 @@ sealed interface Pantalla {
 class ControladorApp(
     private val api: ClienteApi,
     private val autenticador: Autenticador,
+    private val permisos: GestorPermisos,
     private val alcance: CoroutineScope,
 ) {
     private val estado = MutableStateFlow<Pantalla>(Pantalla.Splash)
@@ -72,7 +76,8 @@ class ControladorApp(
             estado.value = Pantalla.Vehiculo(guardando = true)
             try {
                 api.guardarVehiculo(Vehiculo(ultimoDigitoPlaca = digito, llevaParrillero = parrillero))
-                estado.value = destinoDeSesionConVehiculo()
+                // Un guardado que termina tarde no revierte un cierre de sesión.
+                estado.value = if (autenticador.haySesion()) Pantalla.Permisos(permisosConcedidos()) else Pantalla.Registro()
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -80,6 +85,29 @@ class ControladorApp(
             }
         }
     }
+
+    fun solicitarPermiso(p: Permiso) {
+        alcance.launch {
+            val concedido = try {
+                permisos.solicitar(p)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            val actual = estado.value
+            if (actual is Pantalla.Permisos) {
+                estado.value = Pantalla.Permisos(if (concedido) actual.concedidos + p else actual.concedidos - p)
+            }
+        }
+    }
+
+    /** «Continuar» y «Ahora no»: con o sin permisos concedidos se sigue a Inicio. */
+    fun terminarPermisos() {
+        alcance.launch { estado.value = destinoDeSesionConVehiculo() }
+    }
+
+    private fun permisosConcedidos(): Set<Permiso> = Permiso.entries.filter(permisos::concedido).toSet()
 
     fun cerrarSesion() {
         alcance.launch {

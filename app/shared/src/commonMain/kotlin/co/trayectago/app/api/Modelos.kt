@@ -1,5 +1,6 @@
 package co.trayectago.app.api
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
 
 // Modelos según contratos/openapi/v1.yaml.
@@ -29,6 +30,13 @@ data class Preferencias(
 
 @Serializable
 data class NoMolestar(val activo: Boolean? = null, val desde: String? = null, val hasta: String? = null)
+
+@Serializable
+data class Vehiculo(
+    @EncodeDefault val tipo: String = "moto",
+    val ultimoDigitoPlaca: Int,
+    @EncodeDefault val llevaParrillero: Boolean = false,
+)
 
 /** Problem Details (RFC 9457). */
 @Serializable

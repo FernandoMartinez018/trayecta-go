@@ -42,6 +42,7 @@ private fun Navegacion(config: ConfiguracionApp, autenticador: Autenticador) {
         Pantalla.Splash -> PantallaCargando()
         is Pantalla.Registro -> PantallaRegistro(actual.error, alIngresar = controlador::ingresar)
         is Pantalla.Inicio -> PantallaInicio(alCerrarSesion = controlador::cerrarSesion)
+        is Pantalla.Vehiculo -> PantallaVehiculo(actual, controlador::guardarVehiculo)
         Pantalla.SinConexion -> PantallaError(Textos.SIN_CONEXION_TITULO, Textos.SIN_CONEXION_CUERPO, controlador::reintentar)
     }
 }

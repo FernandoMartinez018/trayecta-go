@@ -36,6 +36,25 @@ object Textos {
     const val REINTENTAR = "Reintentar"
 
     const val FALTA_CONFIGURACION = "Falta la configuración del servidor en esta compilación."
+    const val ERROR_GUARDAR_VEHICULO = "No pudimos guardar tu vehículo. Intenta de nuevo en unos segundos. Si sigue fallando, revisa tu conexión."
+
+    const val CONTINUAR = "Continuar"
+
+    // Pasos del primer uso: «Paso 1 de 3» (vehículo) y «Paso 2 de 3» (permisos).
+    fun paso(actual: Int, total: Int) = "Paso $actual de $total"
+
+    // Pantalla 1 (Main.dc.html): vehículo
+    const val VEHICULO_TITULO = "Bienvenido a Trayecta Go"
+    const val VEHICULO_SUBTITULO = "Cuéntanos en qué te mueves para darte rutas que sí te sirven."
+    const val VEHICULO_SECCION = "TU VEHÍCULO"
+    const val VEHICULO_MOTO = "Moto"
+    const val VEHICULO_CARRO = "Carro"
+    const val PROXIMAMENTE = "Próximamente"
+    const val DIGITO_SECCION = "ÚLTIMO DÍGITO DE TU PLACA"
+    const val DIGITO_AYUDA = "Solo guardamos este dígito, para aplicar el pico y placa."
+    const val PARRILLERO_TITULO = "¿Sueles llevar parrillero?"
+    const val PARRILLERO_AYUDA = "Para las restricciones de parrillero"
+    fun placaTerminadaEn(digito: Int) = "Placa terminada en $digito"
 
     // Inicio provisional: lo reemplaza la pantalla 4 (mapa) en H2.
     const val INICIO_TITULO = "Todo listo"

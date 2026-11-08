@@ -8,6 +8,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.install
 import io.ktor.server.application.log
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.ContentTransformationException
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respondText
 import kotlinx.serialization.Serializable
@@ -50,6 +51,10 @@ fun Application.instalarProblemas() {
         }
         exception<BadRequestException> { call, _ ->
             call.responderProblema(HttpStatusCode.BadRequest, "Solicitud inválida", "El cuerpo no es un JSON válido para este recurso.")
+        }
+        // Content-Type ausente o distinto de application/json: Ktor lo lanza como IOException, pero es un error del cliente, no un 500.
+        exception<ContentTransformationException> { call, _ ->
+            call.responderProblema(HttpStatusCode.BadRequest, "Solicitud inválida", "El cuerpo debe enviarse como application/json.")
         }
         status(HttpStatusCode.NotFound) { call, _ ->
             call.responderProblema(HttpStatusCode.NotFound, "No encontrado")

@@ -6,13 +6,18 @@ import co.trayectago.app.api.Usuario
 import co.trayectago.app.auth.Autenticador
 import co.trayectago.app.auth.OpcionIngreso
 import co.trayectago.app.auth.ResultadoIngreso
+import co.trayectago.app.ingreso.correoValido
 import co.trayectago.app.ui.Textos
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+// La pantalla de inicio se ve al menos este tiempo, para que no parpadee.
+private const val SPLASH_MINIMO_MS = 600L
 
 sealed interface Pantalla {
     data object Splash : Pantalla
@@ -28,21 +33,35 @@ class ControladorApp(
     private val alcance: CoroutineScope,
 ) {
     private val estado = MutableStateFlow<Pantalla>(Pantalla.Splash)
+    private var intentoIngreso = 0
     val pantalla: StateFlow<Pantalla> = estado.asStateFlow()
 
     fun arrancar() {
-        alcance.launch { cargarSesion() }
+        val desdeSplash = estado.value == Pantalla.Splash
+        alcance.launch {
+            val pausa = if (desdeSplash) launch { delay(SPLASH_MINIMO_MS) } else null
+            val destino = destinoDeSesion()
+            pausa?.join()
+            estado.value = destino
+        }
     }
 
     fun reintentar() = arrancar()
 
     fun ingresar(opcion: OpcionIngreso) {
+        val elegida = when (opcion) {
+            is OpcionIngreso.Correo -> if (correoValido(opcion.correo)) OpcionIngreso.Correo(opcion.correo.trim()) else return
+            else -> opcion
+        }
+        val intento = ++intentoIngreso
         alcance.launch {
-            when (autenticador.iniciarSesion(opcion)) {
-                ResultadoIngreso.Exito -> cargarSesion()
-                ResultadoIngreso.Cancelado -> estado.value = Pantalla.Registro()
-                is ResultadoIngreso.Fallo -> estado.value = Pantalla.Registro(error = Textos.ERROR_INGRESO)
+            val resultado = autenticador.iniciarSesion(elegida)
+            val destino = when (resultado) {
+                ResultadoIngreso.Exito -> destinoDeSesion()
+                ResultadoIngreso.Cancelado -> Pantalla.Registro()
+                is ResultadoIngreso.Fallo -> Pantalla.Registro(error = Textos.ERROR_INGRESO)
             }
+            if (intento == intentoIngreso) estado.value = destino
         }
     }
 
@@ -53,12 +72,9 @@ class ControladorApp(
         }
     }
 
-    private suspend fun cargarSesion() {
-        if (!autenticador.haySesion()) {
-            estado.value = Pantalla.Registro()
-            return
-        }
-        estado.value = try {
+    private suspend fun destinoDeSesion(): Pantalla {
+        if (!autenticador.haySesion()) return Pantalla.Registro()
+        return try {
             Pantalla.Inicio(api.yo())
         } catch (e: ErrorApi.NoAutenticado) {
             autenticador.cerrarSesion()

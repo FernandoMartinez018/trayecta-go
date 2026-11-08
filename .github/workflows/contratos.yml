@@ -2,10 +2,10 @@ name: Contratos
 
 on:
   pull_request:
-    paths: ["contratos/**"]
+    paths: ["contratos/**", ".github/workflows/contratos.yml"]
   push:
     branches: [main]
-    paths: ["contratos/**"]
+    paths: ["contratos/**", ".github/workflows/contratos.yml"]
 
 permissions:
   contents: read

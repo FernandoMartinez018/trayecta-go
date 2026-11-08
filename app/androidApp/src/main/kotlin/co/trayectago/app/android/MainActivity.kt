@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
         )
         // Se crea en onCreate: registra su ActivityResultLauncher antes de que la actividad arranque.
         val autenticador = AutenticadorAppAuth(this, config)
-        setContent { App(config, autenticador) }
+        val permisos = GestorPermisosAndroid(this)
+        setContent { App(config, autenticador, permisos) }
     }
 }

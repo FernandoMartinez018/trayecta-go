@@ -4,6 +4,7 @@ import co.trayectago.app.auth.OpcionIngreso
 import co.trayectago.app.auth.ResultadoIngreso
 import co.trayectago.app.estado.ControladorApp
 import co.trayectago.app.estado.Pantalla
+import co.trayectago.app.permisos.Permiso
 import co.trayectago.app.ui.Textos
 import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.client.engine.mock.respond
@@ -21,13 +22,17 @@ import kotlin.test.assertIs
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ControladorAppTest {
-    private fun TestScope.controlador(autenticador: AutenticadorFalso, manejador: MockRequestHandler = { peticion ->
+    private fun TestScope.controlador(
+        autenticador: AutenticadorFalso,
+        permisos: GestorPermisosFalso = GestorPermisosFalso(),
+        manejador: MockRequestHandler = { peticion ->
         if (peticion.url.encodedPath == "/v1/me/vehiculo") {
             respond("""{"tipo":"moto","ultimoDigitoPlaca":4,"llevaParrillero":false}""", HttpStatusCode.OK, JSON)
         } else {
             respond(USUARIO_JSON, HttpStatusCode.OK, JSON)
         }
-    }) = ControladorApp(ServidorFalso(StandardTestDispatcher(testScheduler), manejador).cliente(autenticador), autenticador, this)
+    },
+    ) = ControladorApp(ServidorFalso(StandardTestDispatcher(testScheduler), manejador).cliente(autenticador), autenticador, permisos, this)
 
     @Test
     fun `sin sesión va a Registro`() = runTest {
@@ -52,7 +57,7 @@ class ControladorAppTest {
     @Test
     fun `sesión vencida cierra sesión y va a Registro`() = runTest {
         val autenticador = AutenticadorFalso()
-        val c = controlador(autenticador) { respond("", HttpStatusCode.Unauthorized) }
+        val c = controlador(autenticador, manejador = { respond("", HttpStatusCode.Unauthorized) })
 
         c.arrancar()
         advanceUntilIdle()
@@ -80,7 +85,7 @@ class ControladorAppTest {
     @Test
     fun `un 503 del backend conserva la sesión`() = runTest {
         val autenticador = AutenticadorFalso()
-        val c = controlador(autenticador) { respond("", HttpStatusCode.ServiceUnavailable) }
+        val c = controlador(autenticador, manejador = { respond("", HttpStatusCode.ServiceUnavailable) })
 
         c.arrancar()
         advanceUntilIdle()
@@ -112,7 +117,7 @@ class ControladorAppTest {
                 autenticador.opciones += opcion
                 return if (intentos++ == 0) primero.await() else segundo.await()
             }
-        }, this)
+        }, GestorPermisosFalso(), this)
 
         control.ingresar(OpcionIngreso.Google)
         runCurrent()
@@ -134,7 +139,7 @@ class ControladorAppTest {
             else respond(USUARIO_JSON, HttpStatusCode.OK, JSON)
         }
         val autenticador = AutenticadorFalso()
-        val c = ControladorApp(servidor.cliente(autenticador), autenticador, this)
+        val c = ControladorApp(servidor.cliente(autenticador), autenticador, GestorPermisosFalso(), this)
 
         c.arrancar()
         advanceUntilIdle()
@@ -143,18 +148,67 @@ class ControladorAppTest {
     }
 
     @Test
-    fun `guardar con éxito avanza`() = runTest {
-        val servidor = ServidorFalso(StandardTestDispatcher(testScheduler)) {
-            if (it.url.encodedPath == "/v1/me/vehiculo") respond("""{"tipo":"moto","ultimoDigitoPlaca":4,"llevaParrillero":false}""", HttpStatusCode.OK, JSON)
-            else respond(USUARIO_JSON, HttpStatusCode.OK, JSON)
-        }
-        val autenticador = AutenticadorFalso()
-        val c = ControladorApp(servidor.cliente(autenticador), autenticador, this)
+    fun `tras guardar el vehículo se muestran los permisos`() = runTest {
+        val c = controlador(AutenticadorFalso())
 
         c.guardarVehiculo(4, false)
         advanceUntilIdle()
 
-        assertIs<Pantalla.Inicio>(c.pantalla.value)
+        assertEquals(Pantalla.Permisos(), c.pantalla.value)
+    }
+
+    @Test
+    fun `los permisos ya concedidos aparecen marcados al entrar`() = runTest {
+        val c = controlador(AutenticadorFalso(), GestorPermisosFalso(concedidos = setOf(Permiso.NOTIFICACIONES)))
+
+        c.guardarVehiculo(4, false)
+        advanceUntilIdle()
+
+        assertEquals(Pantalla.Permisos(concedidos = setOf(Permiso.NOTIFICACIONES)), c.pantalla.value)
+    }
+
+    @Test
+    fun `Permitir pide el permiso una vez y lo marca concedido`() = runTest {
+        val permisos = GestorPermisosFalso()
+        val c = controlador(AutenticadorFalso(), permisos)
+        c.guardarVehiculo(4, false)
+        advanceUntilIdle()
+
+        c.solicitarPermiso(Permiso.UBICACION)
+        advanceUntilIdle()
+
+        assertEquals(listOf(Permiso.UBICACION), permisos.solicitudes)
+        assertEquals(Pantalla.Permisos(concedidos = setOf(Permiso.UBICACION)), c.pantalla.value)
+    }
+
+    @Test
+    fun `un permiso negado no bloquea`() = runTest {
+        val permisos = GestorPermisosFalso(acepta = false)
+        val c = controlador(AutenticadorFalso(), permisos)
+        c.guardarVehiculo(4, false)
+        advanceUntilIdle()
+
+        c.solicitarPermiso(Permiso.MICROFONO)
+        advanceUntilIdle()
+        assertEquals(Pantalla.Permisos(), c.pantalla.value)
+
+        c.terminarPermisos()
+        advanceUntilIdle()
+        assertEquals("Usuario 0042", assertIs<Pantalla.Inicio>(c.pantalla.value).usuario.alias)
+    }
+
+    @Test
+    fun `terminar los permisos con la sesión vencida vuelve a Registro`() = runTest {
+        val autenticador = AutenticadorFalso()
+        val c = controlador(autenticador)
+        c.guardarVehiculo(4, false)
+        advanceUntilIdle()
+        autenticador.sesion = false
+
+        c.terminarPermisos()
+        advanceUntilIdle()
+
+        assertEquals(Pantalla.Registro(), c.pantalla.value)
     }
 
     @Test
@@ -169,7 +223,7 @@ class ControladorAppTest {
             }
         }
         val autenticador = AutenticadorFalso()
-        val c = ControladorApp(servidor.cliente(autenticador), autenticador, this)
+        val c = ControladorApp(servidor.cliente(autenticador), autenticador, GestorPermisosFalso(), this)
 
         c.guardarVehiculo(4, false)
         runCurrent()
@@ -185,7 +239,7 @@ class ControladorAppTest {
     fun `guardar sin conexión se queda con el error`() = runTest {
         val servidor = ServidorFalso(StandardTestDispatcher(testScheduler)) { throw kotlinx.io.IOException("sin red") }
         val autenticador = AutenticadorFalso()
-        val c = ControladorApp(servidor.cliente(autenticador), autenticador, this)
+        val c = ControladorApp(servidor.cliente(autenticador), autenticador, GestorPermisosFalso(), this)
 
         c.guardarVehiculo(4, false)
         advanceUntilIdle()

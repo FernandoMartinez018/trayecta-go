@@ -5,6 +5,8 @@ import co.trayectago.app.api.ErrorApi
 import co.trayectago.app.auth.Autenticador
 import co.trayectago.app.auth.OpcionIngreso
 import co.trayectago.app.auth.ResultadoIngreso
+import co.trayectago.app.permisos.GestorPermisos
+import co.trayectago.app.permisos.Permiso
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.MockRequestHandler
@@ -14,6 +16,20 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineDispatcher
+
+/** Permisos del sistema controlables: cuáles ya están concedidos y si el usuario acepta o niega cada solicitud. */
+class GestorPermisosFalso(concedidos: Set<Permiso> = emptySet(), private val acepta: Boolean = true) : GestorPermisos {
+    private val concedidos = concedidos.toMutableSet()
+    val solicitudes = mutableListOf<Permiso>()
+
+    override fun concedido(p: Permiso) = p in concedidos
+
+    override suspend fun solicitar(p: Permiso): Boolean {
+        solicitudes += p
+        if (acepta) concedidos += p
+        return acepta
+    }
+}
 
 /** Autenticador controlable: sesión, tokens y resultado del ingreso a gusto de cada prueba. */
 class AutenticadorFalso(

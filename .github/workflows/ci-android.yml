@@ -6,6 +6,8 @@ on:
   push:
     branches: [main]
     paths: ["app/**", "diseno/**", ".github/workflows/ci-android.yml"]
+  # A mano: recompila con las variables vigentes (por ejemplo URL_API_PRUEBAS y URL_AUTH_PRUEBAS) sin tocar código.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -73,15 +75,15 @@ jobs:
           path: app/androidApp/build/outputs/apk/pruebas/${{ steps.apk.outputs.variante }}/*.apk
           if-no-files-found: error
 
-      # Solo en main, con la firma y con FIREBASE_APP_ID: mientras no existan, este paso se omite.
+      # Solo en main (por push o lanzado a mano), con la firma y con FIREBASE_APP_ID: mientras no existan, este paso se omite.
       - name: Distribuir por Firebase App Distribution
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.FIREBASE_APP_ID != '' && steps.apk.outputs.variante == 'release'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && vars.FIREBASE_APP_ID != '' && steps.apk.outputs.variante == 'release'
         working-directory: .
         env:
           FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
           FIREBASE_TESTERS: ${{ vars.FIREBASE_TESTERS }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          NOTAS_COMMIT: ${{ github.event.head_commit.message }}
+          NOTAS_COMMIT: ${{ github.event.head_commit.message || 'Compilación manual' }}
         run: |
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/fad.json"
           GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/fad.json" npx --yes firebase-tools@15.34.0 appdistribution:distribute \
